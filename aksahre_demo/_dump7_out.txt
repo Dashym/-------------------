@@ -1,0 +1,136 @@
+######## sales_receipt_ratio_improvement.py (141-275 of 394) ########
+ 141|             .melt(id_vars="季度序号", var_name="股票代码", value_name=name)
+ 142|             .set_index(["季度序号", "股票代码"])
+ 143|         )
+ 144|         pieces.append(piece)
+ 145|     return pd.concat(pieces, axis=1).reset_index()
+ 146| 
+ 147| 
+ 148| def build_ttm(data, trading_days=None):
+ 149|     """构建季度级 TTM、销售收现比与同比改善，返回长表。
+ 150| 
+ 151|     传入交易日历时，可用日期取公告日之后的第一个交易日（避免使用当日收盘后才披露的财报）。
+ 152|     """
+ 153|     grid = to_contiguous_grid(data)
+ 154|     single_revenue = to_single_quarter(grid["营业总收入_累计"])
+ 155|     single_received = to_single_quarter(grid["销售收现_累计"])
+ 156|     ttm_revenue = single_revenue.rolling(4, min_periods=4).sum()
+ 157|     ttm_received = single_received.rolling(4, min_periods=4).sum()
+ 158| 
+ 159|     positive_revenue = ttm_revenue.where(ttm_revenue > 0)
+ 160|     ratio = ttm_received.where(positive_revenue.notna()) / positive_revenue
+ 161|     ratio = ratio.replace([np.inf, -np.inf], np.nan)
+ 162|     prior_ratio = ratio.shift(4)
+ 163|     factor = ratio - prior_ratio
+ 164| 
+ 165|     # 可用日期 = 本期 TTM 窗口（4 季）与去年同期 TTM 窗口（shift(4)）中最晚的公告日
+ 166|     notice_float = rolling_max_window(grid["首次公告日期"])
+ 167|     current_window = notice_float
+ 168|     prior_window = notice_float.shift(4)
+ 169|     available = pd.DataFrame(
+ 170|         float_ns_to_datetime(
+ 171|             np.fmax(current_window.to_numpy(dtype="float64"),
+ 172|                     prior_window.to_numpy(dtype="float64"))
+ 173|         ),
+ 174|         index=current_window.index,
+ 175|         columns=current_window.columns,
+ 176|     )
+ 177|     if trading_days is not None:
+ 178|         available = pd.DataFrame(
+ 179|             next_trading_day(available.to_numpy(dtype="datetime64[ns]"), trading_days),
+ 180|             index=available.index,
+ 181|             columns=available.columns,
+ 182|         )
+ 183| 
+ 184|     detail = wide_frames_to_long(
+ 185|         {
+ 186|             "营业收入TTM": ttm_revenue,
+ 187|             "销售收现TTM": ttm_received,
+ 188|             "销售收现比": ratio,
+ 189|             "去年同期销售收现比": prior_ratio,
+ 190|             FACTOR_COLUMN: factor,
+ 191|             "首次公告日期": grid["首次公告日期"],
+ 192|             "可用日期": available,
+ 193|         }
+ 194|     )
+ 195|     detail["报告期"] = pd.to_datetime(detail["季度序号"].map(quarter_to_period_end))
+ 196|     detail = detail.drop(columns=["季度序号"])
+ 197|     return detail.replace([np.inf, -np.inf], np.nan)
+ 198| 
+ 199| 
+ 200| def load_pool(path=POOL_FILE):
+ 201|     """股票池（申万二级汽车零部件）+ 上市日期（用于动态剔除未上市个股）。"""
+ 202|     pool = pd.read_csv(path, dtype={"股票代码": str}, encoding="utf-8-sig")
+ 203|     pool["股票代码"] = normalize_codes(pool["股票代码"])
+ 204|     pool["listing_date"] = pd.to_datetime(pool["listing_date"], errors="coerce").dt.normalize()
+ 205|     pool = pool.dropna(subset=["股票代码"]).drop_duplicates("股票代码", keep="last")
+ 206|     return pool.rename(columns={"listing_date": "上市日"})
+ 207| 
+ 208| 
+ 209| def load_trading_calendar(path=ADJUSTED_QUOTE_FILE):
+ 210|     """全量交易日历（升序 numpy 数组），用于把公告日顺延到其后第一个交易日。"""
+ 211|     quotes = pd.read_csv(path, dtype={"股票代码": str}, encoding="utf-8-sig", usecols=["日期"])
+ 212|     calendar = pd.to_datetime(quotes["日期"], errors="coerce").dropna().unique()
+ 213|     return np.sort(calendar.astype("datetime64[ns]"))
+ 214| 
+ 215| 
+ 216| def next_trading_day(notice_dates, trading_days):
+ 217|     """公告日（NaT 表示缺失）→ 严格晚于公告日的第一个交易日；NaT 保持缺失。"""
+ 218|     values = np.asarray(notice_dates, dtype="datetime64[ns]")
+ 219|     shape = values.shape
+ 220|     flat = values.reshape(-1).astype("datetime64[D]")
+ 221|     days = np.asarray(trading_days, dtype="datetime64[D]")
+ 222|     result = np.full(flat.shape, np.datetime64("NaT"), dtype="datetime64[ns]")
+ 223|     valid = ~np.isnat(flat)
+ 224|     if valid.any():
+ 225|         positions = np.searchsorted(days, flat[valid], side="right")
+ 226|         inside = positions < len(days)
+ 227|         target = np.nonzero(valid)[0][inside]
+ 228|         result[target] = days[positions[inside]].astype("datetime64[ns]")
+ 229|     return result.reshape(shape)
+ 230| 
+ 231| 
+ 232| def load_cross_section_dates(path=ADJUSTED_QUOTE_FILE):
+ 233|     """月末交易日序列（截面日），区间 [2019-01-01, 2024-11-01]。"""
+ 234|     calendar = pd.DataFrame({"日期": load_trading_calendar(path)})
+ 235|     calendar["月份"] = calendar["日期"].dt.to_period("M")
+ 236|     month_end = calendar.groupby("月份")["日期"].max().sort_values()
+ 237|     month_end = month_end.loc[
+ 238|         (month_end >= MIN_CROSS_SECTION_DATE) & (month_end <= MAX_CROSS_SECTION_DATE)
+ 239|     ]
+ 240|     return list(month_end)
+ 241| 
+ 242| 
+ 243| def build_month_end_panel(detail, pool, cross_section_dates):
+ 244|     """按月末截面日取"已公告的最新因子值"，生成截面面板。"""
+ 245|     usable = detail.dropna(subset=[FACTOR_COLUMN, "可用日期"])
+ 246|     usable = usable.sort_values(["股票代码", "报告期"], kind="mergesort")
+ 247|     frames = []
+ 248|     for as_of in cross_section_dates:
+ 249|         available = usable.loc[usable["可用日期"] <= as_of]
+ 250|         if available.empty:
+ 251|             continue
+ 252|         latest = available.drop_duplicates("股票代码", keep="last").copy()
+ 253|         latest = latest.merge(pool, on="股票代码", how="inner", validate="many_to_one")
+ 254|         latest = latest.loc[latest["上市日"] <= as_of]
+ 255|         latest["可用日期"] = as_of
+ 256|         latest["截面月份"] = as_of.to_period("M").strftime("%Y-%m")
+ 257|         frames.append(latest)
+ 258|     if not frames:
+ 259|         raise ValueError("没有任何月末截面可用，请检查数据区间与公告日期")
+ 260|     panel = pd.concat(frames, ignore_index=True)
+ 261|     return panel.sort_values(["可用日期", "股票代码"], kind="mergesort").reset_index(drop=True)
+ 262| 
+ 263| 
+ 264| def _format_date_columns(frame, columns):
+ 265|     result = frame.copy()
+ 266|     for column in columns:
+ 267|         result[column] = pd.to_datetime(result[column]).dt.strftime("%Y-%m-%d")
+ 268|     return result
+ 269| 
+ 270| 
+ 271| def to_cross_section_file(panel):
+ 272|     """截面因子文件（三大检验的输入）。"""
+ 273|     columns = [
+ 274|         "股票代码",
+ 275|         "可用日期",

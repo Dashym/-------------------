@@ -1,0 +1,10 @@
+[测试模式] 仅爬取前 5 只：['000030', '000338', '000559', '000570', '000581']
+=== TRACEBACK ===
+Traceback (most recent call last):
+  File "<string>", line 20, in <module>
+  File "C:\Users\Heyuanhang\Desktop\aksahre_demo\07_财报爬取.py", line 335, in main
+    FinancialCrawler(stock_codes).prepare().fetch_all().diff_to_quarterly().sort_and_save()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Heyuanhang\Desktop\aksahre_demo\07_财报爬取.py", line 123, in prepare
+    raise FileExistsError(
+FileExistsError: 输出文件已存在，为防止覆盖请先手动删除或改名：C:\Users\Heyuanhang\Desktop\aksahre_demo\raw_data\A股汽车零部件_季度财报_原始_2019-2026_TEST.csv

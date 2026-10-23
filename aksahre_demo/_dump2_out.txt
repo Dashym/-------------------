@@ -1,0 +1,130 @@
+######## sales_receipt_ratio_ic.py (104-232 of 392) ########
+ 104| def _prepare_signals(factor):
+ 105|     """因子长表 → 可用日期级信号（同一股票同一可用日期只保留一条）。"""
+ 106|     required = {"股票代码", "可用日期", FACTOR_COLUMN}
+ 107|     missing_columns = required.difference(factor.columns)
+ 108|     if missing_columns:
+ 109|         raise ValueError(f"因子数据缺少必要字段: {', '.join(sorted(missing_columns))}")
+ 110| 
+ 111|     signals = factor.loc[:, ["股票代码", "可用日期", FACTOR_COLUMN]].copy()
+ 112|     signals["股票代码"] = _normalize_codes(signals["股票代码"])
+ 113|     signals["可用日期"] = pd.to_datetime(
+ 114|         signals["可用日期"], errors="raise"
+ 115|     ).dt.normalize()
+ 116|     signals[FACTOR_COLUMN] = pd.to_numeric(signals[FACTOR_COLUMN], errors="coerce")
+ 117|     signals = signals.replace([np.inf, -np.inf], np.nan).dropna(
+ 118|         subset=["股票代码", "可用日期", FACTOR_COLUMN]
+ 119|     )
+ 120|     signals = signals.sort_values(["股票代码", "可用日期"]).drop_duplicates(
+ 121|         ["股票代码", "可用日期"], keep="last"
+ 122|     )
+ 123|     return signals.reset_index(drop=True)
+ 124| 
+ 125| 
+ 126| def _next_day_returns(adjusted_quotes):
+ 127|     """后复权收盘价 → T+1 次日收益（含收益实现日）。"""
+ 128|     required = {"股票代码", "日期", "收盘"}
+ 129|     missing_columns = required.difference(adjusted_quotes.columns)
+ 130|     if missing_columns:
+ 131|         raise ValueError(f"行情数据缺少必要字段: {', '.join(sorted(missing_columns))}")
+ 132| 
+ 133|     data = adjusted_quotes.loc[:, ["股票代码", "日期", "收盘"]].copy()
+ 134|     data["股票代码"] = _normalize_codes(data["股票代码"])
+ 135|     data["日期"] = pd.to_datetime(data["日期"], errors="raise").dt.normalize()
+ 136|     data["收盘"] = pd.to_numeric(data["收盘"], errors="coerce")
+ 137|     data = data.dropna(subset=["股票代码", "日期", "收盘"])
+ 138|     data = data.loc[data["收盘"] > 0].copy()
+ 139|     if data.duplicated(["股票代码", "日期"]).any():
+ 140|         raise ValueError("行情数据存在重复的股票代码和日期记录")
+ 141| 
+ 142|     data = data.sort_values(["股票代码", "日期"])
+ 143|     grouped = data.groupby("股票代码", sort=False)
+ 144|     data["收益实现日"] = grouped["日期"].shift(-1)
+ 145|     data["次日收益"] = grouped["收盘"].shift(-1) / data["收盘"] - 1
+ 146|     data = data.dropna(subset=["收益实现日", "次日收益"])
+ 147|     return data[["股票代码", "日期", "收益实现日", "次日收益"]]
+ 148| 
+ 149| 
+ 150| def _clean_cross_section(cross_section):
+ 151|     """截面清洗：MAD(5 倍) 去极值 → 对数流通市值回归中性化 → Z-score。"""
+ 152|     values = cross_section[FACTOR_COLUMN].to_numpy(dtype="float64")
+ 153|     median = np.median(values)
+ 154|     mad = np.median(np.abs(values - median))
+ 155|     if mad > 0 and np.isfinite(mad):
+ 156|         values = np.clip(values, median - 5 * 1.4826 * mad, median + 5 * 1.4826 * mad)
+ 157| 
+ 158|     design = np.column_stack(
+ 159|         [np.ones(len(values)), cross_section["ln流通市值"].to_numpy(dtype="float64")]
+ 160|     )
+ 161|     coefficients, _, _, _ = np.linalg.lstsq(design, values, rcond=None)
+ 162|     residuals = values - design @ coefficients
+ 163|     residual_std = residuals.std(ddof=0)
+ 164|     if residual_std == 0 or not np.isfinite(residual_std):
+ 165|         cleaned = np.zeros(len(residuals))
+ 166|     else:
+ 167|         cleaned = (residuals - residuals.mean()) / residual_std
+ 168| 
+ 169|     cross_section = cross_section.copy()
+ 170|     cross_section["因子截尾值"] = values
+ 171|     cross_section["因子清洗值"] = cleaned
+ 172|     return cross_section
+ 173| 
+ 174| 
+ 175| def _month_cross_section(
+ 176|     signals,
+ 177|     market,
+ 178|     returns,
+ 179|     month,
+ 180|     min_cross_section=MIN_CROSS_SECTION_SIZE,
+ 181|     limit_threshold=LIMIT_MOVE_THRESHOLD,
+ 182| ):
+ 183|     """构造某个月末截面：点时因子 + 对数流通市值 + T+1 收益，并做截面清洗。"""
+ 184|     month_market = market.loc[market["月份"] == month]
+ 185|     if month_market.empty:
+ 186|         return pd.DataFrame()
+ 187|     month_end = month_market["日期"].max()
+ 188|     if month_end > MAX_FACTOR_ASOF:
+ 189|         return pd.DataFrame()
+ 190| 
+ 191|     as_of = signals.loc[signals["可用日期"] <= month_end]
+ 192|     if as_of.empty:
+ 193|         return pd.DataFrame()
+ 194|     as_of = (
+ 195|         as_of.sort_values(["股票代码", "可用日期"])
+ 196|         .drop_duplicates("股票代码", keep="last")
+ 197|         .rename(columns={"可用日期": "因子可用日期"})
+ 198|     )
+ 199| 
+ 200|     cross_section = as_of.merge(
+ 201|         month_market[["股票代码", "ln流通市值"]],
+ 202|         on="股票代码",
+ 203|         how="inner",
+ 204|         validate="one_to_one",
+ 205|     ).merge(
+ 206|         returns.loc[
+ 207|             returns["日期"] == month_end, ["股票代码", "收益实现日", "次日收益"]
+ 208|         ],
+ 209|         on="股票代码",
+ 210|         how="inner",
+ 211|         validate="one_to_one",
+ 212|     )
+ 213|     cross_section = cross_section.replace([np.inf, -np.inf], np.nan).dropna(
+ 214|         subset=[FACTOR_COLUMN, "ln流通市值", "收益实现日", "次日收益"]
+ 215|     )
+ 216|     cross_section = cross_section.loc[cross_section["收益实现日"] <= MAX_RETURN_DATE]
+ 217|     cross_section = cross_section.loc[
+ 218|         cross_section["次日收益"].abs() <= limit_threshold
+ 219|     ]
+ 220|     if len(cross_section) < min_cross_section:
+ 221|         return pd.DataFrame()
+ 222| 
+ 223|     cross_section = cross_section.copy()
+ 224|     cross_section["月份"] = month
+ 225|     cross_section["截面日"] = month_end
+ 226|     cross_section = cross_section.sort_values("股票代码").reset_index(drop=True)
+ 227|     return _clean_cross_section(cross_section)
+ 228| 
+ 229| 
+ 230| def _pearson(first, second):
+ 231|     first_centered = first - first.mean()
+ 232|     second_centered = second - second.mean()

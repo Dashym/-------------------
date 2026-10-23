@@ -1,0 +1,973 @@
+################ inventory_turnover_ic.py ################
+   1| import logging
+   2| import sys
+   3| from pathlib import Path
+   4| 
+   5| import numpy as np
+   6| import pandas as pd
+   7| 
+   8| 
+   9| logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+  10| log = logging.getLogger(__name__)
+  11| 
+  12| SCRIPT_DIR = Path(__file__).resolve().parent
+  13| BASE_DIR = SCRIPT_DIR.parent.parent / "aksahre_demo"
+  14| FACTOR_FILE = SCRIPT_DIR / "存货周转改善率_raw.csv"
+  15| UNADJUSTED_QUOTE_FILE = BASE_DIR / "A股日线_20190101-20260331_不复权.csv"
+  16| ADJUSTED_QUOTE_FILE = (
+  17|     BASE_DIR
+  18|     / "clean_temp"
+  19|     / "A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv"
+  20| )
+  21| OUTPUT_FILE = SCRIPT_DIR / "存货周转改善率_IC_未来12个月.txt"
+  22| FACTOR_COLUMN = "存货周转改善率（TTM同比）"
+  23| MIN_CROSS_SECTION_SIZE = 10
+  24| FORWARD_HORIZON_MONTHS = 12
+  25| 
+  26| 
+  27| def _normalize_codes(values):
+  28|     return (
+  29|         values.astype(str)
+  30|         .str.strip()
+  31|         .str.replace(r"\.0$", "", regex=True)
+  32|         .str.replace(r"\.(SZ|SH|BJ)$", "", case=False, regex=True)
+  33|         .str.replace(r"[^0-9]", "", regex=True)
+  34|         .str.zfill(6)
+  35|     )
+  36| 
+  37| 
+  38| def _monthly_market_data(quotes, adjusted=False):
+  39|     required = {"股票代码", "日期", "收盘"}
+  40|     if not adjusted:
+  41|         required.update({"成交量", "换手率"})
+  42|     missing_columns = required.difference(quotes.columns)
+  43|     if missing_columns:
+  44|         raise ValueError(f"行情数据缺少必要字段: {', '.join(sorted(missing_columns))}")
+  45| 
+  46|     columns = ["股票代码", "日期", "收盘"]
+  47|     if not adjusted:
+  48|         columns.extend(["成交量", "换手率"])
+  49|     data = quotes.loc[:, columns].copy()
+  50|     data["股票代码"] = _normalize_codes(data["股票代码"])
+  51|     data["日期"] = pd.to_datetime(data["日期"], errors="raise").dt.normalize()
+  52|     for column in columns[2:]:
+  53|         data[column] = pd.to_numeric(data[column], errors="coerce")
+  54|     data = data.dropna(subset=["股票代码", "日期", "收盘"])
+  55|     data = data.loc[data["收盘"] > 0].copy()
+  56|     if data.duplicated(["股票代码", "日期"]).any():
+  57|         raise ValueError("行情数据存在重复的股票代码和日期记录")
+  58|     data["月份"] = data["日期"].dt.to_period("M")
+  59| 
+  60|     if not adjusted:
+  61|         valid_turnover = data.loc[data["换手率"] > 0, "换手率"]
+  62|         if valid_turnover.empty:
+  63|             raise ValueError("行情中没有有效换手率，无法估算流通市值")
+  64|         turnover_scale = 10000 if valid_turnover.max() > 1.5 else 100
+  65|         data["流通股本估算"] = (
+  66|             data["成交量"] / data["换手率"] * turnover_scale
+  67|         )
+  68|         data["ln流通市值"] = np.log(
+  69|             (data["收盘"] * data["流通股本估算"]).where(
+  70|                 (data["收盘"] * data["流通股本估算"]) > 0
+  71|             )
+  72|         )
+  73|         data.loc[~np.isfinite(data["ln流通市值"]), "ln流通市值"] = np.nan
+  74| 
+  75|     month_end = (
+  76|         data.sort_values(["股票代码", "日期"])
+  77|         .groupby(["股票代码", "月份"], as_index=False)
+  78|         .tail(1)
+  79|         .copy()
+  80|     )
+  81|     return month_end
+  82| 
+  83| 
+  84| def calculate_monthly_ic(
+  85|     factor,
+  86|     unadjusted_quotes,
+  87|     adjusted_quotes,
+  88|     min_cross_section=MIN_CROSS_SECTION_SIZE,
+  89| ):
+  90|     required = {"股票代码", "可用日期", FACTOR_COLUMN}
+  91|     missing_columns = required.difference(factor.columns)
+  92|     if missing_columns:
+  93|         raise ValueError(f"因子数据缺少必要字段: {', '.join(sorted(missing_columns))}")
+  94| 
+  95|     signals = factor.loc[:, ["股票代码", "可用日期", FACTOR_COLUMN]].copy()
+  96|     signals["股票代码"] = _normalize_codes(signals["股票代码"])
+  97|     signals["可用日期"] = pd.to_datetime(
+  98|         signals["可用日期"], errors="raise"
+  99|     ).dt.normalize()
+ 100|     signals[FACTOR_COLUMN] = pd.to_numeric(signals[FACTOR_COLUMN], errors="coerce")
+ 101|     signals = signals.replace([np.inf, -np.inf], np.nan).dropna(
+ 102|         subset=["股票代码", "可用日期", FACTOR_COLUMN]
+ 103|     )
+ 104|     signals = signals.sort_values(["股票代码", "可用日期"])
+ 105|     signals = signals.drop_duplicates(
+ 106|         ["股票代码", "可用日期"], keep="last"
+ 107|     )
+ 108| 
+ 109|     market = _monthly_market_data(unadjusted_quotes)
+ 110|     adjusted = _monthly_market_data(adjusted_quotes, adjusted=True)
+ 111|     market = market.rename(columns={"日期": "市值日期"})
+ 112|     adjusted_prices = adjusted.pivot(
+ 113|         index="月份", columns="股票代码", values="收盘"
+ 114|     )
+ 115|     all_months = pd.period_range(
+ 116|         adjusted_prices.index.min(), adjusted_prices.index.max(), freq="M"
+ 117|     )
+ 118|     adjusted_prices = adjusted_prices.reindex(all_months)
+ 119|     forward_returns = (
+ 120|         adjusted_prices.shift(-12).div(adjusted_prices).sub(1)
+ 121|     )
+ 122|     forward_returns.index.name = "月份"
+ 123|     forward_returns = (
+ 124|         forward_returns.rename_axis(columns="股票代码")
+ 125|         .reset_index()
+ 126|         .melt(id_vars="月份", var_name="股票代码", value_name="持有期收益")
+ 127|         .dropna(subset=["持有期收益"])
+ 128|     )
+ 129| 
+ 130|     market_months = sorted(market["月份"].unique())
+ 131|     results = []
+ 132|     for month in market_months:
+ 133|         month_end = market.loc[market["月份"] == month, "市值日期"].max()
+ 134|         as_of = signals.loc[signals["可用日期"] <= month_end]
+ 135|         if as_of.empty:
+ 136|             continue
+ 137|         as_of = (
+ 138|             as_of.sort_values(["股票代码", "可用日期"])
+ 139|             .drop_duplicates("股票代码", keep="last")
+ 140|         )
+ 141|         current_market = market.loc[market["月份"] == month]
+ 142|         current_returns = forward_returns.loc[forward_returns["月份"] == month]
+ 143|         cross_section = as_of.merge(
+ 144|             current_market[["股票代码", "月份", "ln流通市值"]],
+ 145|             on="股票代码",
+ 146|             how="inner",
+ 147|             validate="one_to_one",
+ 148|         ).merge(
+ 149|             current_returns[["股票代码", "月份", "持有期收益"]],
+ 150|             on=["股票代码", "月份"],
+ 151|             how="inner",
+ 152|             validate="one_to_one",
+ 153|         )
+ 154|         cross_section = cross_section.replace([np.inf, -np.inf], np.nan).dropna(
+ 155|             subset=[FACTOR_COLUMN, "ln流通市值", "持有期收益"]
+ 156|         )
+ 157|         if len(cross_section) < min_cross_section:
+ 158|             continue
+ 159| 
+ 160|         values = cross_section[FACTOR_COLUMN]
+ 161|         median = values.median()
+ 162|         mad = (values - median).abs().median()
+ 163|         if mad > 0 and np.isfinite(mad):
+ 164|             values = values.clip(
+ 165|                 lower=median - 5 * 1.4826 * mad,
+ 166|                 upper=median + 5 * 1.4826 * mad,
+ 167|             )
+ 168| 
+ 169|         design = np.column_stack(
+ 170|             [
+ 171|                 np.ones(len(cross_section)),
+ 172|                 cross_section["ln流通市值"].to_numpy(dtype=float),
+ 173|             ]
+ 174|         )
+ 175|         coefficients, _, _, _ = np.linalg.lstsq(
+ 176|             design, values.to_numpy(dtype=float), rcond=None
+ 177|         )
+ 178|         residuals = values.to_numpy(dtype=float) - design @ coefficients
+ 179|         residual_std = residuals.std(ddof=0)
+ 180|         if residual_std == 0 or not np.isfinite(residual_std):
+ 181|             continue
+ 182|         standardized = (residuals - residuals.mean()) / residual_std
+ 183|         returns = cross_section["持有期收益"].to_numpy(dtype=float)
+ 184|         rank_ic = pd.Series(standardized).rank(method="average").corr(
+ 185|             pd.Series(returns).rank(method="average")
+ 186|         )
+ 187|         pearson_ic = pd.Series(standardized).corr(pd.Series(returns))
+ 188|         results.append(
+ 189|             {
+ 190|                 "截面月份": str(month),
+ 191|                 "截面日期": month_end.strftime("%Y-%m-%d"),
+ 192|                 "预测月份": str(month + FORWARD_HORIZON_MONTHS),
+ 193|                 "股票数": len(cross_section),
+ 194|                 "Rank IC": rank_ic,
+ 195|                 "Pearson IC": pearson_ic,
+ 196|             }
+ 197|         )
+ 198| 
+ 199|     return pd.DataFrame(
+ 200|         results,
+ 201|         columns=[
+ 202|             "截面月份",
+ 203|             "截面日期",
+ 204|             "预测月份",
+ 205|             "股票数",
+ 206|             "Rank IC",
+ 207|             "Pearson IC",
+ 208|         ],
+ 209|     )
+ 210| 
+ 211| 
+ 212| def _statistics(values):
+ 213|     values = values.dropna()
+ 214|     if values.empty:
+ 215|         return {
+ 216|             "mean": float("nan"),
+ 217|             "std": float("nan"),
+ 218|             "ir": float("nan"),
+ 219|             "positive_ratio": float("nan"),
+ 220|             "t_stat": float("nan"),
+ 221|         }
+ 222|     mean = values.mean()
+ 223|     standard_deviation = values.std(ddof=1) if len(values) > 1 else float("nan")
+ 224|     standard_error = standard_deviation / np.sqrt(len(values))
+ 225|     return {
+ 226|         "mean": mean,
+ 227|         "std": standard_deviation,
+ 228|         "ir": mean / standard_deviation
+ 229|         if np.isfinite(standard_deviation) and standard_deviation > 0
+ 230|         else float("nan"),
+ 231|         "positive_ratio": (values > 0).mean(),
+ 232|         "t_stat": mean / standard_error
+ 233|         if np.isfinite(standard_error) and standard_error > 0
+ 234|         else float("nan"),
+ 235|     }
+ 236| 
+ 237| 
+ 238| def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dates):
+ 239|     if results.empty:
+ 240|         raise ValueError("没有达到最小样本数要求的有效月度 IC 截面")
+ 241|     rank = _statistics(results["Rank IC"])
+ 242|     pearson = _statistics(results["Pearson IC"])
+ 243|     cumulative = results["Rank IC"].cumsum()
+ 244| 
+ 245|     lines = [
+ 246|         "=" * 72,
+ 247|         "存货周转改善率（TTM同比）IC 检验报告",
+ 248|         "=" * 72,
+ 249|         "",
+ 250|         "检测口径：",
+ 251|         "  月末截面使用截至该月最后交易日已公告的最新因子值（不使用未来财报）",
+ 252|         "  对月末截面重新执行 MAD(5倍) 去极值、对数流通市值回归中性化及 Z-score",
+ 253|         "  收益：未来 12 个月累计后复权收益 = t+12 月末后复权收盘 / t 月末后复权收盘 - 1",
+ 254|         "  Rank IC：因子与未来 12 个月累计收益的 Spearman 秩相关；Pearson IC：线性相关",
+ 255|         f"  最少有效股票数/截面：{MIN_CROSS_SECTION_SIZE}",
+ 256|         "  IR：月度 IC 均值 / 月度 IC 样本标准差（ddof=1）",
+ 257|         "  t-stat 未做 Newey-West 等时间序列自相关调整",
+ 258|         "",
+ 259|         "数据概况：",
+ 260|         f"  原始因子：{factor_rows:,} 条，可用日期 {factor_dates[0]} ~ {factor_dates[1]}",
+ 261|         f"  不复权行情（用于流通市值）：{market_dates[0]} ~ {market_dates[1]}",
+ 262|         f"  后复权行情（用于收益）：{adjusted_dates[0]} ~ {adjusted_dates[1]}",
+ 263|         f"  有效月度截面：{len(results)} 期；因子月份 {results['截面月份'].iloc[0]} ~ {results['截面月份'].iloc[-1]}",
+ 264|         f"  平均有效股票数：{results['股票数'].mean():.1f}，范围 {results['股票数'].min()} ~ {results['股票数'].max()}",
+ 265|         "",
+ 266|         f"{'指标':<16}{'Rank IC':>14}{'Pearson IC':>16}",
+ 267|         "-" * 46,
+ 268|         f"{'IC 均值':<16}{rank['mean']:>14.4f}{pearson['mean']:>16.4f}",
+ 269|         f"{'IC 标准差':<16}{rank['std']:>14.4f}{pearson['std']:>16.4f}",
+ 270|         f"{'ICIR':<16}{rank['ir']:>14.4f}{pearson['ir']:>16.4f}",
+ 271|         f"{'IC > 0 占比':<16}{rank['positive_ratio']:>13.2%}{pearson['positive_ratio']:>15.2%}",
+ 272|         f"{'t-stat':<16}{rank['t_stat']:>14.4f}{pearson['t_stat']:>16.4f}",
+ 273|         "",
+ 274|         f"累计 Rank IC：{cumulative.iloc[0]:.4f} -> {cumulative.iloc[-1]:.4f}",
+ 275|         f"综合提示：样本内 Rank IC {'为正' if rank['mean'] > 0 else '为负'}，均值 {rank['mean']:.4f}，ICIR {rank['ir']:.4f}；请结合样本长度及后续分层回测判断，不代表未来表现。",
+ 276|         "",
+ 277|         "逐月结果：",
+ 278|         f"{'因子月份':<12}{'预测月份':<12}{'样本数':>8}{'Rank IC':>12}{'Pearson IC':>14}",
+ 279|         "-" * 58,
+ 280|     ]
+ 281|     lines.extend(
+ 282|         f"{row['截面月份']:<12}{row['预测月份']:<12}{row['股票数']:>8d}{row['Rank IC']:>12.4f}{row['Pearson IC']:>14.4f}"
+ 283|         for _, row in results.iterrows()
+ 284|     )
+ 285|     lines.extend(["", "=" * 72, ""])
+ 286|     return "\n".join(lines)
+ 287| 
+ 288| 
+ 289| def main():
+ 290|     for input_file in (FACTOR_FILE, UNADJUSTED_QUOTE_FILE, ADJUSTED_QUOTE_FILE):
+ 291|         if not input_file.is_file():
+ 292|             log.error("输入文件不存在: %s", input_file)
+ 293|             return 1
+ 294| 
+ 295|     factor = pd.read_csv(FACTOR_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
+ 296|     unadjusted = pd.read_csv(
+ 297|         UNADJUSTED_QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig"
+ 298|     )
+ 299|     adjusted = pd.read_csv(
+ 300|         ADJUSTED_QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig"
+ 301|     )
+ 302|     results = calculate_monthly_ic(factor, unadjusted, adjusted)
+ 303|     factor_dates = pd.to_datetime(factor["可用日期"], errors="raise")
+ 304|     market_dates = pd.to_datetime(unadjusted["日期"], errors="raise")
+ 305|     adjusted_dates = pd.to_datetime(adjusted["日期"], errors="raise")
+ 306|     report = render_report(
+ 307|         results,
+ 308|         len(factor),
+ 309|         (factor_dates.min().strftime("%Y-%m-%d"), factor_dates.max().strftime("%Y-%m-%d")),
+ 310|         (market_dates.min().strftime("%Y-%m-%d"), market_dates.max().strftime("%Y-%m-%d")),
+ 311|         (
+ 312|             adjusted_dates.min().strftime("%Y-%m-%d"),
+ 313|             adjusted_dates.max().strftime("%Y-%m-%d"),
+ 314|         ),
+ 315|     )
+ 316|     OUTPUT_FILE.write_text(report, encoding="utf-8")
+ 317|     print(report, end="")
+ 318|     log.info("IC 检验报告已输出：%s", OUTPUT_FILE)
+ 319|     return 0
+ 320| 
+ 321| 
+ 322| if __name__ == "__main__":
+ 323|     sys.exit(main())
+
+################ inventory_turnover_regression_12m.py ################
+   1| import logging
+   2| import math
+   3| import sys
+   4| from pathlib import Path
+   5| 
+   6| import numpy as np
+   7| import pandas as pd
+   8| 
+   9| from inventory_turnover_ic import (
+  10|     ADJUSTED_QUOTE_FILE,
+  11|     FACTOR_COLUMN,
+  12|     FACTOR_FILE,
+  13|     MIN_CROSS_SECTION_SIZE,
+  14|     UNADJUSTED_QUOTE_FILE,
+  15|     _monthly_market_data,
+  16|     _normalize_codes,
+  17| )
+  18| 
+  19| 
+  20| logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+  21| log = logging.getLogger(__name__)
+  22| 
+  23| SCRIPT_DIR = Path(__file__).resolve().parent
+  24| OUTPUT_FILE = SCRIPT_DIR / "存货周转改善率_回归结果_未来12个月.txt"
+  25| FORWARD_HORIZON_MONTHS = 12
+  26| HAC_MAX_LAGS = 11
+  27| 
+  28| 
+  29| def calculate_monthly_regressions(
+  30|     factor,
+  31|     unadjusted_quotes,
+  32|     adjusted_quotes,
+  33|     min_cross_section=MIN_CROSS_SECTION_SIZE,
+  34| ):
+  35|     required = {"股票代码", "可用日期", FACTOR_COLUMN}
+  36|     missing_columns = required.difference(factor.columns)
+  37|     if missing_columns:
+  38|         raise ValueError(f"因子数据缺少必要字段: {', '.join(sorted(missing_columns))}")
+  39| 
+  40|     signals = factor.loc[:, ["股票代码", "可用日期", FACTOR_COLUMN]].copy()
+  41|     signals["股票代码"] = _normalize_codes(signals["股票代码"])
+  42|     signals["可用日期"] = pd.to_datetime(
+  43|         signals["可用日期"], errors="raise"
+  44|     ).dt.normalize()
+  45|     signals[FACTOR_COLUMN] = pd.to_numeric(signals[FACTOR_COLUMN], errors="coerce")
+  46|     signals = signals.replace([np.inf, -np.inf], np.nan).dropna(
+  47|         subset=["股票代码", "可用日期", FACTOR_COLUMN]
+  48|     )
+  49|     signals = signals.sort_values(["股票代码", "可用日期"])
+  50|     signals = signals.drop_duplicates(["股票代码", "可用日期"], keep="last")
+  51| 
+  52|     market = _monthly_market_data(unadjusted_quotes)
+  53|     adjusted = _monthly_market_data(adjusted_quotes, adjusted=True)
+  54|     prices = adjusted.pivot(index="月份", columns="股票代码", values="收盘")
+  55|     all_months = pd.period_range(prices.index.min(), prices.index.max(), freq="M")
+  56|     prices = prices.reindex(all_months)
+  57|     forward_returns = prices.shift(-12).div(prices).sub(1)
+  58|     forward_returns.index.name = "月份"
+  59|     forward_returns = (
+  60|         forward_returns.rename_axis(columns="股票代码")
+  61|         .reset_index()
+  62|         .melt(id_vars="月份", var_name="股票代码", value_name="未来12个月收益")
+  63|         .dropna(subset=["未来12个月收益"])
+  64|     )
+  65| 
+  66|     results = []
+  67|     for month in sorted(market["月份"].unique()):
+  68|         month_end = market.loc[market["月份"] == month, "日期"].max()
+  69|         as_of = signals.loc[signals["可用日期"] <= month_end]
+  70|         if as_of.empty:
+  71|             continue
+  72|         as_of = (
+  73|             as_of.sort_values(["股票代码", "可用日期"])
+  74|             .drop_duplicates("股票代码", keep="last")
+  75|         )
+  76| 
+  77|         cross_section = as_of.merge(
+  78|             market.loc[
+  79|                 market["月份"] == month,
+  80|                 ["股票代码", "月份", "ln流通市值"],
+  81|             ],
+  82|             on="股票代码",
+  83|             how="inner",
+  84|             validate="one_to_one",
+  85|         ).merge(
+  86|             forward_returns.loc[forward_returns["月份"] == month],
+  87|             on=["股票代码", "月份"],
+  88|             how="inner",
+  89|             validate="one_to_one",
+  90|         )
+  91|         cross_section = cross_section.replace([np.inf, -np.inf], np.nan).dropna(
+  92|             subset=[FACTOR_COLUMN, "ln流通市值", "未来12个月收益"]
+  93|         )
+  94|         if len(cross_section) < min_cross_section:
+  95|             continue
+  96| 
+  97|         values = cross_section[FACTOR_COLUMN]
+  98|         median = values.median()
+  99|         mad = (values - median).abs().median()
+ 100|         if mad > 0 and np.isfinite(mad):
+ 101|             values = values.clip(
+ 102|                 lower=median - 5 * 1.4826 * mad,
+ 103|                 upper=median + 5 * 1.4826 * mad,
+ 104|             )
+ 105| 
+ 106|         size = cross_section["ln流通市值"].to_numpy(dtype=float)
+ 107|         neutral_design = np.column_stack([np.ones(len(cross_section)), size])
+ 108|         neutral_coefficients, _, _, _ = np.linalg.lstsq(
+ 109|             neutral_design, values.to_numpy(dtype=float), rcond=None
+ 110|         )
+ 111|         residuals = values.to_numpy(dtype=float) - neutral_design @ neutral_coefficients
+ 112|         residual_std = residuals.std(ddof=0)
+ 113|         if residual_std == 0 or not np.isfinite(residual_std):
+ 114|             continue
+ 115|         x = (residuals - residuals.mean()) / residual_std
+ 116|         y = cross_section["未来12个月收益"].to_numpy(dtype=float)
+ 117|         regression_design = np.column_stack([np.ones(len(x)), x])
+ 118|         if np.linalg.matrix_rank(regression_design) < 2:
+ 119|             continue
+ 120| 
+ 121|         coefficients, _, _, _ = np.linalg.lstsq(regression_design, y, rcond=None)
+ 122|         prediction = regression_design @ coefficients
+ 123|         residual_sum_squares = float(np.sum((y - prediction) ** 2))
+ 124|         total_sum_squares = float(np.sum((y - y.mean()) ** 2))
+ 125|         r_squared = (
+ 126|             1 - residual_sum_squares / total_sum_squares
+ 127|             if total_sum_squares > 0
+ 128|             else 0.0
+ 129|         )
+ 130|         results.append(
+ 131|             {
+ 132|                 "月份": str(month),
+ 133|                 "截面日期": month_end.strftime("%Y-%m-%d"),
+ 134|                 "预测月份": str(month + FORWARD_HORIZON_MONTHS),
+ 135|                 "股票数": len(cross_section),
+ 136|                 "alpha": coefficients[0],
+ 137|                 "beta": coefficients[1],
+ 138|                 "R-squared": r_squared,
+ 139|             }
+ 140|         )
+ 141| 
+ 142|     return pd.DataFrame(
+ 143|         results,
+ 144|         columns=["月份", "截面日期", "预测月份", "股票数", "alpha", "beta", "R-squared"],
+ 145|     )
+ 146| 
+ 147| 
+ 148| def _beta_continued_fraction(a, b, x):
+ 149|     maximum_iterations = 200
+ 150|     epsilon = 3e-14
+ 151|     tiny = 1e-300
+ 152|     qab = a + b
+ 153|     qap = a + 1
+ 154|     qam = a - 1
+ 155|     c = 1.0
+ 156|     d = 1 - qab * x / qap
+ 157|     if abs(d) < tiny:
+ 158|         d = tiny
+ 159|     d = 1 / d
+ 160|     result = d
+ 161| 
+ 162|     for iteration in range(1, maximum_iterations + 1):
+ 163|         m2 = 2 * iteration
+ 164|         numerator = iteration * (b - iteration) * x / (
+ 165|             (qam + m2) * (a + m2)
+ 166|         )
+ 167|         d = 1 + numerator * d
+ 168|         if abs(d) < tiny:
+ 169|             d = tiny
+ 170|         c = 1 + numerator / c
+ 171|         if abs(c) < tiny:
+ 172|             c = tiny
+ 173|         d = 1 / d
+ 174|         result *= d * c
+ 175| 
+ 176|         numerator = -(a + iteration) * (qab + iteration) * x / (
+ 177|             (a + m2) * (qap + m2)
+ 178|         )
+ 179|         d = 1 + numerator * d
+ 180|         if abs(d) < tiny:
+ 181|             d = tiny
+ 182|         c = 1 + numerator / c
+ 183|         if abs(c) < tiny:
+ 184|             c = tiny
+ 185|         d = 1 / d
+ 186|         delta = d * c
+ 187|         result *= delta
+ 188|         if abs(delta - 1) < epsilon:
+ 189|             return result
+ 190| 
+ 191|     raise ArithmeticError("Student-t p 值计算未收敛")
+ 192| 
+ 193| 
+ 194| def _regularized_incomplete_beta(x, a, b):
+ 195|     if x <= 0:
+ 196|         return 0.0
+ 197|     if x >= 1:
+ 198|         return 1.0
+ 199|     front = math.exp(
+ 200|         math.lgamma(a + b)
+ 201|         - math.lgamma(a)
+ 202|         - math.lgamma(b)
+ 203|         + a * math.log(x)
+ 204|         + b * math.log1p(-x)
+ 205|     )
+ 206|     if x < (a + 1) / (a + b + 2):
+ 207|         return front * _beta_continued_fraction(a, b, x) / a
+ 208|     return 1 - front * _beta_continued_fraction(b, a, 1 - x) / b
+ 209| 
+ 210| 
+ 211| def two_sided_t_pvalue(t_statistic, degrees_of_freedom):
+ 212|     if degrees_of_freedom < 1 or not np.isfinite(t_statistic):
+ 213|         return float("nan")
+ 214|     x = degrees_of_freedom / (degrees_of_freedom + float(t_statistic) ** 2)
+ 215|     return _regularized_incomplete_beta(x, degrees_of_freedom / 2, 0.5)
+ 216| 
+ 217| 
+ 218| def _newey_west_mean_standard_error(values, max_lags=HAC_MAX_LAGS):
+ 219|     values = np.asarray(values, dtype=float)
+ 220|     if values.ndim != 1 or not np.isfinite(values).all():
+ 221|         raise ValueError("HAC 系数序列必须是一维有限数值")
+ 222|     if max_lags < 0:
+ 223|         raise ValueError("HAC 滞后期数不能为负数")
+ 224|     observations = len(values)
+ 225|     if observations <= max_lags:
+ 226|         raise ValueError(
+ 227|             f"HAC 滞后期数 {max_lags} 必须小于系数观测数 {observations}"
+ 228|         )
+ 229| 
+ 230|     residuals = values - values.mean()
+ 231|     long_run_variance = float(np.dot(residuals, residuals) / observations)
+ 232|     for lag in range(1, max_lags + 1):
+ 233|         bartlett_weight = 1 - lag / (max_lags + 1)
+ 234|         autocovariance = float(
+ 235|             np.dot(residuals[lag:], residuals[:-lag]) / observations
+ 236|         )
+ 237|         long_run_variance += 2 * bartlett_weight * autocovariance
+ 238| 
+ 239|     variance_of_mean = long_run_variance / observations
+ 240|     variance_of_mean *= observations / (observations - 1)
+ 241|     if variance_of_mean < 0 and np.isclose(variance_of_mean, 0):
+ 242|         variance_of_mean = 0.0
+ 243|     if variance_of_mean < 0:
+ 244|         raise ArithmeticError("Newey-West HAC 方差估计为负")
+ 245|     return float(np.sqrt(variance_of_mean))
+ 246| 
+ 247| 
+ 248| def _coefficient_summary(values, max_lags=HAC_MAX_LAGS):
+ 249|     values = np.asarray(values, dtype=float)
+ 250|     mean = float(values.mean())
+ 251|     standard_error = _newey_west_mean_standard_error(values, max_lags=max_lags)
+ 252|     t_stat = (
+ 253|         mean / standard_error
+ 254|         if np.isfinite(standard_error) and standard_error > 0
+ 255|         else float("nan")
+ 256|     )
+ 257|     return {
+ 258|         "mean": mean,
+ 259|         "standard_error": standard_error,
+ 260|         "t_stat": t_stat,
+ 261|         "p_value": two_sided_t_pvalue(t_stat, len(values) - 1),
+ 262|     }
+ 263| 
+ 264| 
+ 265| def _significance(p_value):
+ 266|     if p_value < 0.01:
+ 267|         return "***"
+ 268|     if p_value < 0.05:
+ 269|         return "**"
+ 270|     if p_value < 0.1:
+ 271|         return "*"
+ 272|     return ""
+ 273| 
+ 274| 
+ 275| def render_report(regressions, factor_rows, factor_dates, market_dates, adjusted_dates):
+ 276|     if len(regressions) < 2:
+ 277|         raise ValueError("有效回归截面不足 2 期，无法进行 Fama-MacBeth 系数检验")
+ 278| 
+ 279|     alpha = _coefficient_summary(regressions["alpha"])
+ 280|     beta = _coefficient_summary(regressions["beta"])
+ 281|     mean_r_squared = regressions["R-squared"].mean()
+ 282|     direction = "正" if beta["mean"] > 0 else "负" if beta["mean"] < 0 else "零"
+ 283|     if beta["p_value"] < 0.01:
+ 284|         conclusion = "因子回归系数在 1% 水平显著。"
+ 285|     elif beta["p_value"] < 0.05:
+ 286|         conclusion = "因子回归系数在 5% 水平显著。"
+ 287|     elif beta["p_value"] < 0.1:
+ 288|         conclusion = "因子回归系数在 10% 水平显著，统计证据较弱。"
+ 289|     else:
+ 290|         conclusion = "因子回归系数未达到 10% 显著性水平。"
+ 291| 
+ 292|     lines = [
+ 293|         "=" * 72,
+ 294|         "存货周转改善率（TTM同比）Fama-MacBeth 回归报告",
+ 295|         "=" * 72,
+ 296|         "",
+ 297|         "回归设定：",
+ 298|         "  因变量 y：未来 12 个月累计后复权收益 = t+12 月末后复权收盘 / t 月末后复权收盘 - 1",
+ 299|         "  自变量 X：月末时点已公告的最新存货周转改善率，MAD(5倍)截尾、对数流通市值中性化并截面 Z-score",
+ 300|         "  每月截面 OLS：y(i,t+12) = alpha(t) + beta(t) * X(i,t) + error(i,t)",
+ 301|         "  汇总：Fama-MacBeth，报告逐月系数的时间序列均值",
+ 302|         f"  第二阶段标准误：Newey-West HAC，Bartlett 核，最大滞后期数={HAC_MAX_LAGS}，含 n/(n-1) 有限样本修正",
+ 303|         "  t 统计量 = 系数均值 / Newey-West HAC 标准误；p 值采用双侧 Student-t(df=截面数-1)",
+ 304|         "  说明：HAC 用于处理12个月重叠收益窗口导致的月度系数序列自相关",
+ 305|         f"  每期最少有效股票数：{MIN_CROSS_SECTION_SIZE}",
+ 306|         "  beta 单位：因子增加 1 个截面标准差对应的未来 12 个月收益变化（收益率小数）",
+ 307|         "",
+ 308|         "数据概况：",
+ 309|         f"  因子记录：{factor_rows:,} 条，可用日期 {factor_dates[0]} ~ {factor_dates[1]}",
+ 310|         f"  不复权行情（流通市值）：{market_dates[0]} ~ {market_dates[1]}",
+ 311|         f"  后复权行情（收益）：{adjusted_dates[0]} ~ {adjusted_dates[1]}",
+ 312|         f"  有效回归截面：{len(regressions)} 期，月份 {regressions['月份'].iloc[0]} ~ {regressions['月份'].iloc[-1]}",
+ 313|         f"  总观测数：{int(regressions['股票数'].sum()):,}",
+ 314|         f"  平均有效股票数/截面：{regressions['股票数'].mean():.1f}，范围 {regressions['股票数'].min()} ~ {regressions['股票数'].max()}",
+ 315|         f"  平均 R-squared：{mean_r_squared:.4f}",
+ 316|         "",
+ 317|         f"{'变量':<18}{'均值系数':>14}{'标准误':>14}{'t统计量':>12}{'p值':>12}",
+ 318|         "-" * 70,
+ 319|         f"{'const':<18}{alpha['mean']:>14.6f}{alpha['standard_error']:>14.6f}{alpha['t_stat']:>12.4f}{alpha['p_value']:>12.4f} {_significance(alpha['p_value'])}",
+ 320|         f"{'存货周转改善率 beta':<18}{beta['mean']:>14.6f}{beta['standard_error']:>14.6f}{beta['t_stat']:>12.4f}{beta['p_value']:>12.4f} {_significance(beta['p_value'])}",
+ 321|         "-" * 70,
+ 322|         "显著性标记：*** p<0.01，** p<0.05，* p<0.1",
+ 323|         "",
+ 324|         f"beta 方向：{direction}；beta={beta['mean']:.6f}（约 {beta['mean'] * 100:.4f} 个百分点/因子标准差）",
+ 325|         f"Fama-MacBeth t={beta['t_stat']:.4f}，p={beta['p_value']:.4f}",
+ 326|         f"结论：{conclusion}",
+ 327|         "",
+ 328|         "逐月回归结果：",
+ 329|         f"{'月份':<12}{'预测月份':<12}{'样本数':>8}{'alpha':>14}{'beta':>14}{'R-squared':>14}",
+ 330|         "-" * 74,
+ 331|     ]
+ 332|     lines.extend(
+ 333|         f"{row['月份']:<12}{row['预测月份']:<12}{row['股票数']:>8d}{row['alpha']:>14.6f}{row['beta']:>14.6f}{row['R-squared']:>14.4f}"
+ 334|         for _, row in regressions.iterrows()
+ 335|     )
+ 336|     lines.extend(["", "=" * 72, ""])
+ 337|     return "\n".join(lines)
+ 338| 
+ 339| 
+ 340| def main():
+ 341|     for input_file in (FACTOR_FILE, UNADJUSTED_QUOTE_FILE, ADJUSTED_QUOTE_FILE):
+ 342|         if not input_file.is_file():
+ 343|             log.error("输入文件不存在: %s", input_file)
+ 344|             return 1
+ 345| 
+ 346|     factor = pd.read_csv(FACTOR_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
+ 347|     unadjusted = pd.read_csv(
+ 348|         UNADJUSTED_QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig"
+ 349|     )
+ 350|     adjusted = pd.read_csv(
+ 351|         ADJUSTED_QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig"
+ 352|     )
+ 353|     regressions = calculate_monthly_regressions(factor, unadjusted, adjusted)
+ 354|     factor_dates = pd.to_datetime(factor["可用日期"], errors="raise")
+ 355|     market_dates = pd.to_datetime(unadjusted["日期"], errors="raise")
+ 356|     adjusted_dates = pd.to_datetime(adjusted["日期"], errors="raise")
+ 357|     report = render_report(
+ 358|         regressions,
+ 359|         len(factor),
+ 360|         (factor_dates.min().strftime("%Y-%m-%d"), factor_dates.max().strftime("%Y-%m-%d")),
+ 361|         (market_dates.min().strftime("%Y-%m-%d"), market_dates.max().strftime("%Y-%m-%d")),
+ 362|         (
+ 363|             adjusted_dates.min().strftime("%Y-%m-%d"),
+ 364|             adjusted_dates.max().strftime("%Y-%m-%d"),
+ 365|         ),
+ 366|     )
+ 367|     OUTPUT_FILE.write_text(report, encoding="utf-8")
+ 368|     print(report, end="")
+ 369|     log.info("未来 12 个月回归报告已输出：%s", OUTPUT_FILE)
+ 370|     return 0
+ 371| 
+ 372| 
+ 373| if __name__ == "__main__":
+ 374|     sys.exit(main())
+
+################ inventory_turnover_monotonicity_12m.py ################
+   1| import logging
+   2| import sys
+   3| from pathlib import Path
+   4| 
+   5| import numpy as np
+   6| import pandas as pd
+   7| 
+   8| from inventory_turnover_ic import (
+   9|     ADJUSTED_QUOTE_FILE,
+  10|     FACTOR_COLUMN,
+  11|     FACTOR_FILE,
+  12|     MIN_CROSS_SECTION_SIZE,
+  13|     UNADJUSTED_QUOTE_FILE,
+  14|     _monthly_market_data,
+  15|     _normalize_codes,
+  16| )
+  17| from inventory_turnover_regression_12m import (
+  18|     HAC_MAX_LAGS,
+  19|     _coefficient_summary,
+  20|     _significance,
+  21| )
+  22| 
+  23| 
+  24| logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+  25| log = logging.getLogger(__name__)
+  26| 
+  27| SCRIPT_DIR = Path(__file__).resolve().parent
+  28| OUTPUT_FILE = SCRIPT_DIR / "存货周转改善率_单调性检验_未来12个月.txt"
+  29| FORWARD_HORIZON_MONTHS = 12
+  30| QUINTILE_COUNT = 5
+  31| 
+  32| 
+  33| def calculate_monthly_quintile_returns(
+  34|     factor,
+  35|     unadjusted_quotes,
+  36|     adjusted_quotes,
+  37|     min_cross_section=MIN_CROSS_SECTION_SIZE,
+  38|     quintile_count=QUINTILE_COUNT,
+  39| ):
+  40|     if quintile_count < 2:
+  41|         raise ValueError("分组数必须至少为 2")
+  42|     required = {"股票代码", "可用日期", FACTOR_COLUMN}
+  43|     missing_columns = required.difference(factor.columns)
+  44|     if missing_columns:
+  45|         raise ValueError(f"因子数据缺少必要字段: {', '.join(sorted(missing_columns))}")
+  46| 
+  47|     signals = factor.loc[:, ["股票代码", "可用日期", FACTOR_COLUMN]].copy()
+  48|     signals["股票代码"] = _normalize_codes(signals["股票代码"])
+  49|     signals["可用日期"] = pd.to_datetime(
+  50|         signals["可用日期"], errors="raise"
+  51|     ).dt.normalize()
+  52|     signals[FACTOR_COLUMN] = pd.to_numeric(signals[FACTOR_COLUMN], errors="coerce")
+  53|     signals = signals.replace([np.inf, -np.inf], np.nan).dropna(
+  54|         subset=["股票代码", "可用日期", FACTOR_COLUMN]
+  55|     )
+  56|     signals = signals.sort_values(["股票代码", "可用日期"])
+  57|     signals = signals.drop_duplicates(["股票代码", "可用日期"], keep="last")
+  58| 
+  59|     market = _monthly_market_data(unadjusted_quotes)
+  60|     adjusted = _monthly_market_data(adjusted_quotes, adjusted=True)
+  61|     prices = adjusted.pivot(index="月份", columns="股票代码", values="收盘")
+  62|     all_months = pd.period_range(prices.index.min(), prices.index.max(), freq="M")
+  63|     prices = prices.reindex(all_months)
+  64|     forward_returns = prices.shift(-FORWARD_HORIZON_MONTHS).div(prices).sub(1)
+  65|     forward_returns.index.name = "月份"
+  66|     forward_returns = (
+  67|         forward_returns.rename_axis(columns="股票代码")
+  68|         .reset_index()
+  69|         .melt(id_vars="月份", var_name="股票代码", value_name="未来12个月收益")
+  70|         .dropna(subset=["未来12个月收益"])
+  71|     )
+  72| 
+  73|     results = []
+  74|     for month in sorted(market["月份"].unique()):
+  75|         month_end = market.loc[market["月份"] == month, "日期"].max()
+  76|         as_of = signals.loc[signals["可用日期"] <= month_end]
+  77|         if as_of.empty:
+  78|             continue
+  79|         as_of = (
+  80|             as_of.sort_values(["股票代码", "可用日期"])
+  81|             .drop_duplicates("股票代码", keep="last")
+  82|         )
+  83|         cross_section = as_of.merge(
+  84|             market.loc[
+  85|                 market["月份"] == month,
+  86|                 ["股票代码", "月份", "ln流通市值"],
+  87|             ],
+  88|             on="股票代码",
+  89|             how="inner",
+  90|             validate="one_to_one",
+  91|         ).merge(
+  92|             forward_returns.loc[forward_returns["月份"] == month],
+  93|             on=["股票代码", "月份"],
+  94|             how="inner",
+  95|             validate="one_to_one",
+  96|         )
+  97|         cross_section = (
+  98|             cross_section.replace([np.inf, -np.inf], np.nan)
+  99|             .dropna(subset=[FACTOR_COLUMN, "ln流通市值", "未来12个月收益"])
+ 100|             .sort_values("股票代码")
+ 101|         )
+ 102|         if len(cross_section) < max(min_cross_section, quintile_count):
+ 103|             continue
+ 104| 
+ 105|         values = cross_section[FACTOR_COLUMN]
+ 106|         median = values.median()
+ 107|         mad = (values - median).abs().median()
+ 108|         if mad > 0 and np.isfinite(mad):
+ 109|             values = values.clip(
+ 110|                 lower=median - 5 * 1.4826 * mad,
+ 111|                 upper=median + 5 * 1.4826 * mad,
+ 112|             )
+ 113| 
+ 114|         size = cross_section["ln流通市值"].to_numpy(dtype=float)
+ 115|         neutral_design = np.column_stack([np.ones(len(cross_section)), size])
+ 116|         neutral_coefficients, _, _, _ = np.linalg.lstsq(
+ 117|             neutral_design, values.to_numpy(dtype=float), rcond=None
+ 118|         )
+ 119|         residuals = values.to_numpy(dtype=float) - neutral_design @ neutral_coefficients
+ 120|         residual_std = residuals.std(ddof=0)
+ 121|         if residual_std == 0 or not np.isfinite(residual_std):
+ 122|             continue
+ 123| 
+ 124|         cross_section["分组"] = np.ceil(
+ 125|             pd.Series(residuals).rank(method="average").to_numpy()
+ 126|             * quintile_count
+ 127|             / len(cross_section)
+ 128|         ).astype(int)
+ 129|         cross_section["分组"] = cross_section["分组"].clip(
+ 130|             lower=1, upper=quintile_count
+ 131|         )
+ 132|         group_counts = cross_section.groupby("分组").size()
+ 133|         if len(group_counts) != quintile_count:
+ 134|             continue
+ 135| 
+ 136|         row = {
+ 137|             "截面月份": str(month),
+ 138|             "截面日期": month_end.strftime("%Y-%m-%d"),
+ 139|             "预测月份": str(month + FORWARD_HORIZON_MONTHS),
+ 140|             "股票数": len(cross_section),
+ 141|         }
+ 142|         for group in range(1, quintile_count + 1):
+ 143|             group_data = cross_section.loc[cross_section["分组"] == group]
+ 144|             row[f"Q{group}股票数"] = len(group_data)
+ 145|             row[f"Q{group}收益"] = group_data["未来12个月收益"].mean()
+ 146|         row["Q5-Q1收益"] = row["Q5收益"] - row["Q1收益"]
+ 147|         results.append(row)
+ 148| 
+ 149|     columns = ["截面月份", "截面日期", "预测月份", "股票数"]
+ 150|     for group in range(1, quintile_count + 1):
+ 151|         columns.extend([f"Q{group}股票数", f"Q{group}收益"])
+ 152|     columns.append("Q5-Q1收益")
+ 153|     return pd.DataFrame(results, columns=columns)
+ 154| 
+ 155| 
+ 156| def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dates):
+ 157|     if len(results) <= HAC_MAX_LAGS:
+ 158|         raise ValueError(
+ 159|             f"有效分组截面需多于 HAC 滞后期数 {HAC_MAX_LAGS}，当前为 {len(results)} 期"
+ 160|         )
+ 161| 
+ 162|     group_summaries = {
+ 163|         group: _coefficient_summary(results[f"Q{group}收益"])
+ 164|         for group in range(1, QUINTILE_COUNT + 1)
+ 165|     }
+ 166|     spread = _coefficient_summary(results["Q5-Q1收益"])
+ 167|     group_means = [group_summaries[group]["mean"] for group in range(1, 6)]
+ 168|     increasing = all(
+ 169|         left < right for left, right in zip(group_means, group_means[1:])
+ 170|     )
+ 171|     decreasing = all(
+ 172|         left > right for left, right in zip(group_means, group_means[1:])
+ 173|     )
+ 174|     if increasing:
+ 175|         monotonicity = "分组平均收益随因子值严格递增"
+ 176|     elif decreasing:
+ 177|         monotonicity = "分组平均收益随因子值严格递减"
+ 178|     else:
+ 179|         monotonicity = "分组平均收益未呈现严格单调变化"
+ 180| 
+ 181|     lines = [
+ 182|         "=" * 76,
+ 183|         "存货周转改善率（TTM同比）五分组单调性检验报告",
+ 184|         "=" * 76,
+ 185|         "",
+ 186|         "检验设定：",
+ 187|         "  每月末使用当时已公告的最新因子值；按因子值升序分为五组（Q1最低，Q5最高）",
+ 188|         "  月末截面执行 MAD(5倍) 去极值、对数流通市值回归中性化；中性化残差用于排序",
+ 189|         "  各组收益：组内等权平均未来 12 个月累计后复权收益",
+ 190|         "  收益 = t+12 月末后复权收盘 / t 月末后复权收盘 - 1",
+ 191|         f"  每期最少有效股票数：{MIN_CROSS_SECTION_SIZE}；每组必须至少包含 1 只股票",
+ 192|         f"  显著性检验：月度组收益均值及 Q5-Q1 收益差采用 Newey-West HAC，Bartlett 核，滞后 {HAC_MAX_LAGS}",
+ 193|         "  t 统计量的 p 值采用双侧 Student-t，df=有效月度截面数-1",
+ 194|         "",
+ 195|         "数据概况：",
+ 196|         f"  因子记录：{factor_rows:,} 条，可用日期 {factor_dates[0]} ~ {factor_dates[1]}",
+ 197|         f"  不复权行情（流通市值）：{market_dates[0]} ~ {market_dates[1]}",
+ 198|         f"  后复权行情（收益）：{adjusted_dates[0]} ~ {adjusted_dates[1]}",
+ 199|         f"  有效月度截面：{len(results)} 期；{results['截面月份'].iloc[0]} ~ {results['截面月份'].iloc[-1]}",
+ 200|         f"  平均有效股票数：{results['股票数'].mean():.1f}",
+ 201|         "",
+ 202|         "各组未来 12 个月收益（组间等权；对月度组收益时间序列取均值）：",
+ 203|         f"{'分组':<10}{'平均收益':>14}{'HAC标准误':>14}{'t统计量':>14}{'p值':>12}",
+ 204|         "-" * 64,
+ 205|     ]
+ 206|     for group in range(1, QUINTILE_COUNT + 1):
+ 207|         summary = group_summaries[group]
+ 208|         lines.append(
+ 209|             f"{'Q' + str(group):<10}{summary['mean']:>14.4%}"
+ 210|             f"{summary['standard_error']:>14.4%}{summary['t_stat']:>14.4f}"
+ 211|             f"{summary['p_value']:>12.4f}"
+ 212|         )
+ 213|     lines.extend(
+ 214|         [
+ 215|             "-" * 64,
+ 216|             f"Q5-Q1收益差：{spread['mean']:.4%}，HAC标准误={spread['standard_error']:.4%}，"
+ 217|             f"t={spread['t_stat']:.4f}，p={spread['p_value']:.4f} "
+ 218|             f"{_significance(spread['p_value'])}",
+ 219|             f"单调性判断：{monotonicity}。",
+ 220|             "",
+ 221|             "逐月分组结果（收益为未来12个月累计收益）：",
+ 222|             f"{'因子月份':<12}{'预测月份':<12}{'样本数':>8}"
+ 223|             f"{'Q1':>12}{'Q2':>12}{'Q3':>12}{'Q4':>12}{'Q5':>12}{'Q5-Q1':>12}",
+ 224|             "-" * 92,
+ 225|         ]
+ 226|     )
+ 227|     for _, row in results.iterrows():
+ 228|         lines.append(
+ 229|             f"{row['截面月份']:<12}{row['预测月份']:<12}{row['股票数']:>8d}"
+ 230|             + "".join(f"{row[f'Q{group}收益']:>12.2%}" for group in range(1, 6))
+ 231|             + f"{row['Q5-Q1收益']:>12.2%}"
+ 232|         )
+ 233|     lines.extend(["", "=" * 76, ""])
+ 234|     return "\n".join(lines)
+ 235| 
+ 236| 
+ 237| def main():
+ 238|     for input_file in (FACTOR_FILE, UNADJUSTED_QUOTE_FILE, ADJUSTED_QUOTE_FILE):
+ 239|         if not input_file.is_file():
+ 240|             log.error("输入文件不存在: %s", input_file)
+ 241|             return 1
+ 242| 
+ 243|     factor = pd.read_csv(FACTOR_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
+ 244|     unadjusted = pd.read_csv(
+ 245|         UNADJUSTED_QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig"
+ 246|     )
+ 247|     adjusted = pd.read_csv(
+ 248|         ADJUSTED_QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig"
+ 249|     )
+ 250|     results = calculate_monthly_quintile_returns(factor, unadjusted, adjusted)
+ 251|     factor_dates = pd.to_datetime(factor["可用日期"], errors="raise")
+ 252|     market_dates = pd.to_datetime(unadjusted["日期"], errors="raise")
+ 253|     adjusted_dates = pd.to_datetime(adjusted["日期"], errors="raise")
+ 254|     report = render_report(
+ 255|         results,
+ 256|         len(factor),
+ 257|         (factor_dates.min().strftime("%Y-%m-%d"), factor_dates.max().strftime("%Y-%m-%d")),
+ 258|         (market_dates.min().strftime("%Y-%m-%d"), market_dates.max().strftime("%Y-%m-%d")),
+ 259|         (
+ 260|             adjusted_dates.min().strftime("%Y-%m-%d"),
+ 261|             adjusted_dates.max().strftime("%Y-%m-%d"),
+ 262|         ),
+ 263|     )
+ 264|     OUTPUT_FILE.write_text(report, encoding="utf-8")
+ 265|     print(report, end="")
+ 266|     log.info("未来 12 个月单调性报告已输出：%s", OUTPUT_FILE)
+ 267|     return 0
+ 268| 
+ 269| 
+ 270| if __name__ == "__main__":
+ 271|     sys.exit(main())

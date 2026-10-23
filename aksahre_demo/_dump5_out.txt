@@ -1,0 +1,82 @@
+######## sales_receipt_ratio_improvement.py (60-140 of 387) ########
+  60| def progress(message):
+  61|     """按仓库脚本惯例：即时打印并 flush。"""
+  62|     print(message, flush=True)
+  63| 
+  64| 
+  65| def normalize_codes(values):
+  66|     """统一股票代码为 6 位字符串。"""
+  67|     return (
+  68|         values.astype(str)
+  69|         .str.strip()
+  70|         .str.replace(r"\.0$", "", regex=True)
+  71|         .str.replace(r"\.(SZ|SH|BJ)$", "", case=False, regex=True)
+  72|         .str.replace(r"[^0-9]", "", regex=True)
+  73|         .str.zfill(6)
+  74|     )
+  75| 
+  76| 
+  77| def load_crawl_cache(path=CRAWL_FILE):
+  78|     """读取爬虫缓存（东财按报告期接口的累计值）。"""
+  79|     data = pd.read_csv(path, dtype={"股票代码": str}, encoding="utf-8-sig")
+  80|     data["股票代码"] = normalize_codes(data["股票代码"])
+  81|     data["报告期"] = pd.to_datetime(data["报告期"], errors="coerce").dt.normalize()
+  82|     data["首次公告日期"] = pd.to_datetime(data["首次公告日期"], errors="coerce").dt.normalize()
+  83|     for column in CUMULATIVE_COLUMNS:
+  84|         data[column] = pd.to_numeric(data[column], errors="coerce")
+  85|     data = data.dropna(subset=["股票代码", "报告期"])
+  86|     data = data.drop_duplicates(["股票代码", "报告期"], keep="last")
+  87|     data["季度序号"] = data["报告期"].dt.year * 4 + data["报告期"].dt.quarter
+  88|     return data.sort_values(["股票代码", "季度序号"], kind="mergesort").reset_index(drop=True)
+  89| 
+  90| 
+  91| def to_contiguous_grid(data):
+  92|     """长表 → 连续季度网格宽表（index=季度序号，columns=股票代码），缺失季度留 NaN。"""
+  93|     quarters = np.arange(int(data["季度序号"].min()), int(data["季度序号"].max()) + 1)
+  94|     codes = sorted(data["股票代码"].unique())
+  95|     grid = {}
+  96|     for column in CUMULATIVE_COLUMNS + ["首次公告日期"]:
+  97|         wide = data.pivot(index="季度序号", columns="股票代码", values=column)
+  98|         grid[column] = wide.reindex(index=quarters, columns=codes)
+  99|     return grid
+ 100| 
+ 101| 
+ 102| def to_single_quarter(cumulative):
+ 103|     """累计值 → 单季度值：Q1 取累计值本身，Q2/Q3/Q4 与上一季度（网格上一行）差分。
+ 104| 
+ 105|     网格连续，因此 shift(1) 即上一季度；上一季度缺失时结果为 NaN（不做插值）。
+ 106|     """
+ 107|     first_quarter = (cumulative.index % 4) == 1
+ 108|     single = cumulative - cumulative.shift(1)
+ 109|     return single.mask(first_quarter, cumulative, axis=0)
+ 110| 
+ 111| 
+ 112| def rolling_max_window(frame, window=4):
+ 113|     """沿季度网格滚动窗口（当前季 + 前 3 季）取最大值，仅对公告日期使用。"""
+ 114|     numeric = frame.astype("datetime64[ns]").astype("float64")
+ 115|     return numeric.rolling(window, min_periods=window).max()
+ 116| 
+ 117| 
+ 118| def float_ns_to_datetime(values):
+ 119|     """float64（ns，NaN 表示缺失）→ datetime64[ns]（NaT 表示缺失）。"""
+ 120|     values = np.asarray(values, dtype="float64")
+ 121|     converted = np.full(values.shape, np.datetime64("NaT"), dtype="datetime64[ns]")
+ 122|     valid = ~np.isnan(values)
+ 123|     converted[valid] = values[valid].astype("int64").astype("datetime64[ns]")
+ 124|     return converted
+ 125| 
+ 126| 
+ 127| def wide_frames_to_long(frames):
+ 128|     """{列名: 宽表(index=季度序号, columns=股票代码)} → 长表。"""
+ 129|     pieces = []
+ 130|     for name, frame in frames.items():
+ 131|         piece = (
+ 132|             frame.rename_axis(index="季度序号", columns="股票代码")
+ 133|             .reset_index()
+ 134|             .melt(id_vars="季度序号", var_name="股票代码", value_name=name)
+ 135|             .set_index(["季度序号", "股票代码"])
+ 136|         )
+ 137|         pieces.append(piece)
+ 138|     return pd.concat(pieces, axis=1).reset_index()
+ 139| 
+ 140| 

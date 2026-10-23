@@ -1,0 +1,78 @@
+################ sales_receipt_ratio_improvement.py (108-184 of 350) ################
+ 108|     single = cumulative - cumulative.shift(1)
+ 109|     return single.mask(first_quarter, cumulative, axis=0)
+ 110| 
+ 111| 
+ 112| def rolling_max_window(frame, window=4):
+ 113|     """沿季度网格滚动窗口（当前季 + 前 3 季）取最大值，仅对公告日期使用。"""
+ 114|     numeric = frame.astype("datetime64[ns]").astype("float64")
+ 115|     return numeric.rolling(window, min_periods=window).max()
+ 116| 
+ 117| 
+ 118| def float_ns_to_datetime(values):
+ 119|     """float64（ns，NaN 表示缺失）→ datetime64[ns]（NaT 表示缺失）。"""
+ 120|     values = np.asarray(values, dtype="float64")
+ 121|     converted = np.full(values.shape, np.datetime64("NaT"), dtype="datetime64[ns]")
+ 122|     valid = ~np.isnan(values)
+ 123|     converted[valid] = values[valid].astype("int64").astype("datetime64[ns]")
+ 124|     return converted
+ 125| 
+ 126| 
+ 127| def wide_frames_to_long(frames):
+ 128|     """{列名: 宽表(index=季度序号, columns=股票代码)} → 长表。"""
+ 129|     pieces = []
+ 130|     for name, frame in frames.items():
+ 131|         piece = (
+ 132|             frame.rename_axis(index="季度序号", columns="股票代码")
+ 133|             .reset_index()
+ 134|             .melt(id_vars="季度序号", var_name="股票代码", value_name=name)
+ 135|             .set_index(["季度序号", "股票代码"])
+ 136|         )
+ 137|         pieces.append(piece)
+ 138|     return pd.concat(pieces, axis=1).reset_index()
+ 139| 
+ 140| 
+ 141| def build_ttm(data):
+ 142|     """构建季度级 TTM、销售收现比与同比改善，返回长表。"""
+ 143|     grid = to_contiguous_grid(data)
+ 144|     single_revenue = to_single_quarter(grid["营业总收入_累计"])
+ 145|     single_received = to_single_quarter(grid["销售收现_累计"])
+ 146|     ttm_revenue = single_revenue.rolling(4, min_periods=4).sum()
+ 147|     ttm_received = single_received.rolling(4, min_periods=4).sum()
+ 148| 
+ 149|     positive_revenue = ttm_revenue.where(ttm_revenue > 0)
+ 150|     ratio = ttm_received.where(positive_revenue.notna()) / positive_revenue
+ 151|     ratio = ratio.replace([np.inf, -np.inf], np.nan)
+ 152|     prior_ratio = ratio.shift(4)
+ 153|     factor = ratio - prior_ratio
+ 154| 
+ 155|     # 可用日期 = 本期 TTM 窗口（4 季）与去年同期 TTM 窗口（shift(4)）中最晚的公告日
+ 156|     notice_float = rolling_max_window(grid["首次公告日期"])
+ 157|     current_window = notice_float
+ 158|     prior_window = notice_float.shift(4)
+ 159|     available = pd.DataFrame(
+ 160|         float_ns_to_datetime(
+ 161|             np.fmax(current_window.to_numpy(dtype="float64"),
+ 162|                     prior_window.to_numpy(dtype="float64"))
+ 163|         ),
+ 164|         index=current_window.index,
+ 165|         columns=current_window.columns,
+ 166|     )
+ 167| 
+ 168|     detail = wide_frames_to_long(
+ 169|         {
+ 170|             "营业收入TTM": ttm_revenue,
+ 171|             "销售收现TTM": ttm_received,
+ 172|             "销售收现比": ratio,
+ 173|             "去年同期销售收现比": prior_ratio,
+ 174|             FACTOR_COLUMN: factor,
+ 175|             "首次公告日期": grid["首次公告日期"],
+ 176|             "可用日期": available,
+ 177|         }
+ 178|     )
+ 179|     detail["报告期"] = pd.to_datetime(detail["季度序号"].map(quarter_to_period_end))
+ 180|     detail = detail.drop(columns=["季度序号"])
+ 181|     return detail.replace([np.inf, -np.inf], np.nan)
+ 182| 
+ 183| 
+ 184| def load_pool(path=POOL_FILE):

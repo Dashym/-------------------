@@ -1,0 +1,12 @@
+﻿       38240  C:\Users\Heyuanhang\Desktop\auto_parts_finance\board_auto_members.csv
+       66945  C:\Users\Heyuanhang\Desktop\auto_parts_finance\board_robot_members.csv
+      693948  C:\Users\Heyuanhang\Desktop\auto_parts_finance\finance_df_clean.csv
+     2538924  C:\Users\Heyuanhang\Desktop\auto_parts_finance\indicator_86.csv
+    18297762  C:\Users\Heyuanhang\Desktop\auto_parts_finance\price_df_clean.csv
+        8414  C:\Users\Heyuanhang\Desktop\auto_parts_finance\robot_auto_intersection.csv
+       23880  C:\Users\Heyuanhang\Desktop\auto_parts_finance\robot_auto_intersection_detail.csv
+       41086  C:\Users\Heyuanhang\Desktop\auto_parts_finance\robot_auto_summary.csv
+       73968  C:\Users\Heyuanhang\Desktop\auto_parts_finance\robot_enter_dates_em.csv
+        5215  C:\Users\Heyuanhang\Desktop\auto_parts_finance\sw_auto_parts_stocks_clean.csv
+       75369  C:\Users\Heyuanhang\Desktop\auto_parts_finance\ths_robot_flag.csv
+== 含 SALES/销售/收现 的脚本 ==

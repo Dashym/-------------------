@@ -1,0 +1,24 @@
+C:\Users\Heyuanhang\Desktop\aksahre_demo\raw_data\A股汽车零部件_季度财报_原始_2019-2026.csv | rows=5814 | mtime=10-15 18:09:44
+C:\Users\Heyuanhang\Desktop\aksahre_demo\raw_data\A股汽车零部件_季度财报_原始_2019-2026_TEST.csv | rows=150 | mtime=10-15 17:20:30
+C:\Users\Heyuanhang\Desktop\aksahre_demo\raw_data\A股汽车零部件_季度财报_原始_2019-2026_TEST_V2.csv | rows=150 | mtime=10-15 17:34:41
+C:\Users\Heyuanhang\Desktop\aksahre_demo\raw_data\汽车零部件_销售收现与营业收入_原始.csv | rows=6582 | mtime=10-17 01:31:28
+C:\Users\Heyuanhang\Desktop\aksahre_demo\汽车零部件_剔除ST_上市日期2025-01-01及以后.csv | rows=20 | mtime=10-13 17:42:49
+C:\Users\Heyuanhang\Desktop\aksahre_demo\汽车零部件_剔除ST_上市日期截至2024-12-31.csv | rows=208 | mtime=10-13 17:42:49
+C:\Users\Heyuanhang\Desktop\aksahre_demo\汽车零部件_申万二级成分股.csv | rows=228 | mtime=10-13 17:42:49
+C:\Users\Heyuanhang\Desktop\因子库\申万_汽车零部件_三级分类.csv | rows=431 | mtime=10-16 22:36:41
+C:\Users\Heyuanhang\Desktop\因子库\申万_汽车零部件_三级分类_2024年底快照.csv | rows=401 | mtime=10-16 22:36:41
+C:\Users\Heyuanhang\Desktop\因子库\申万_汽车零部件_全量历史变动.csv | rows=434 | mtime=10-16 22:36:41
+C:\Users\Heyuanhang\Desktop\因子库\销售收现比改善因子\销售收现比改善因子_raw.csv | rows=671 | mtime=10-17 01:30:35
+C:\Users\Heyuanhang\Desktop\因子库\销售收现比改善因子\销售收现比改善因子_明细.csv | rows=380 | mtime=10-17 01:30:35
+
+---- 构建脚本中的路径常量 ----
+  39 | SCRIPT_DIR = Path(__file__).resolve().parent
+  40 | BASE_DIR = SCRIPT_DIR.parent.parent / "aksahre_demo"
+  42 | CRAWL_FILE = BASE_DIR / "raw_data" / "汽车零部件_销售收现与营业收入_原始.csv"
+  43 | POOL_FILE = BASE_DIR / "汽车零部件_申万二级成分股.csv"
+  45 |     BASE_DIR / "clean_temp" / "A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv"
+  48 | FACTOR_FILE = SCRIPT_DIR / "销售收现比改善因子_raw.csv"
+  49 | DETAIL_FILE = SCRIPT_DIR / "销售收现比改善因子_明细.csv"
+  77 | def load_crawl_cache(path=CRAWL_FILE):
+ 200 | def load_pool(path=POOL_FILE):
+ 353 |     for input_file in (CRAWL_FILE, POOL_FILE, ADJUSTED_QUOTE_FILE):

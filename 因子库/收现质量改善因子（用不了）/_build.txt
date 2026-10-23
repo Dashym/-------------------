@@ -1,0 +1,26 @@
+﻿python.exe : 2026-10-17 01:09:37,642 | INFO | 因子名称：收现质量改善因子（经营活动现金流净
+额TTM / 营业总收入TTM 的 TTM 同比改善）
+所在位置 行:1 字符: 48
++ ... \收现质量改善因子'; & 'c:\Users\Heyuanhang\Desktop\aksahre_demo\.venv\
+Scripts ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026-10-17 01:0...TTM  
+   的 TTM 同比改善）:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-10-17 01:09:37,642 | INFO | 输出文件：C:\Users\Heyuanhang\Desktop\因子
+库\收现质量改善因子\收现质量改善因子_raw.csv
+2026-10-17 01:09:37,643 | INFO | 有效记录：2722；股票数：203；报告期范围：2020-12-31 
+~ 2024-09-30；可用日期范围：2021-03-15 ~ 2024-11-01
+2026-10-17 01:09:37,644 | INFO | 因子描述统计：
+count    2722.000000
+mean       -0.004046
+std         0.115627
+min        -0.827296
+25%        -0.063210
+50%        -0.003541
+75%         0.054437
+max         0.902212
+exit=0
+True

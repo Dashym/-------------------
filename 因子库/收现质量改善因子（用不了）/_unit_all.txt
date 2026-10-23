@@ -1,0 +1,59 @@
+﻿python.exe : test_available_date_is_capped_by_no_lookahead_window (t
+est_cash_conversion_improvement.CashConversionImprovementTests.test_
+available_date_is_capped_by_no_lookahead_window) ... ok
+所在位置 行:1 字符: 48
++ ... \收现质量改善因子'; & 'c:\Users\Heyuanhang\Desktop\aksahre_demo\.venv\
+Scripts ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~
+    + CategoryInfo          : NotSpecified: (test_available_..._win 
+   dow) ... ok:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+test_first_factor_requires_a_complete_base_ttm (test_cash_conversion
+_improvement.CashConversionImprovementTests.test_first_factor_requir
+es_a_complete_base_ttm) ... ok
+test_missing_quarter_invalidates_ttm_window (test_cash_conversion_im
+provement.CashConversionImprovementTests.test_missing_quarter_invali
+dates_ttm_window) ... ok
+test_ttm_cash_conversion_and_year_over_year_improvement (test_cash_c
+onversion_improvement.CashConversionImprovementTests.test_ttm_cash_c
+onversion_and_year_over_year_improvement) ... ok
+test_cross_section_is_standardized_and_ordered_by_return (test_cash_
+conversion_ic.CashConversionIcTests.test_cross_section_is_standardiz
+ed_and_ordered_by_return) ... ok
+test_factor_must_be_available_before_month_end (test_cash_conversion
+_ic.CashConversionIcTests.test_factor_must_be_available_before_month
+_end) ... ok
+test_next_day_returns_uses_following_trading_day (test_cash_conversi
+on_ic.CashConversionIcTests.test_next_day_returns_uses_following_tra
+ding_day) ... ok
+test_october_snapshot_is_kept_within_return_cap (test_cash_conversio
+n_ic.CashConversionIcTests.test_october_snapshot_is_kept_within_retu
+rn_cap) ... ok
+test_return_realization_cap_excludes_november_snapshot (test_cash_co
+nversion_ic.CashConversionIcTests.test_return_realization_cap_exclud
+es_november_snapshot) ... ok
+test_spearman_and_pearson (test_cash_conversion_ic.CashConversionIcT
+ests.test_spearman_and_pearson) ... ok
+test_min_cross_section_filters_small_months (test_cash_conversion_mo
+notonicity.CashConversionMonotonicityTests.test_min_cross_section_fi
+lters_small_months) ... ok
+test_quintile_count_must_be_at_least_two (test_cash_conversion_monot
+onicity.CashConversionMonotonicityTests.test_quintile_count_must_be_
+at_least_two) ... ok
+test_quintile_returns_increase_with_factor (test_cash_conversion_mon
+otonicity.CashConversionMonotonicityTests.test_quintile_returns_incr
+ease_with_factor) ... ok
+test_fama_macbeth_beta_is_positive_when_returns_follow_factor (test_
+cash_conversion_regression.CashConversionRegressionTests.test_fama_m
+acbeth_beta_is_positive_when_returns_follow_factor) ... ok
+test_min_cross_section_filters_small_months (test_cash_conversion_re
+gression.CashConversionRegressionTests.test_min_cross_section_filter
+s_small_months) ... ok
+
+--------------------------------------------------------------------
+--
+Ran 15 tests in 0.244s
+
+OK

@@ -1,0 +1,18 @@
+﻿
+LastWriteTime      Length Name                                    
+-------------      ------ ----                                    
+2026/10/17 0:47:45     26 requirements.txt                        
+2026/10/17 0:57:15   7406 sales_receipt_cash_flow_crawler.py      
+2026/10/17 1:17:27  17193 sales_receipt_ratio_ic.py               
+2026/10/17 0:59:09  15583 sales_receipt_ratio_improvement.py      
+2026/10/17 1:17:27  11759 sales_receipt_ratio_monotonicity.py     
+2026/10/17 1:17:27  10280 sales_receipt_ratio_regression.py       
+2026/10/17 1:17:27   5767 test_sales_receipt_ratio_ic.py          
+2026/10/17 1:17:27   1872 test_sales_receipt_ratio_monotonicity.py
+2026/10/17 1:17:27   1367 test_sales_receipt_ratio_regression.py  
+2026/10/17 1:00:49  46287 _crawler_run.err                        
+2026/10/17 0:59:49    277 _crawler_run.log                        
+2026/10/17 1:15:00      0 _crawler_run2.err                       
+2026/10/17 1:16:25    213 _crawler_run2.log                       
+
+

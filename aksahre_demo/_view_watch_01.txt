@@ -1,0 +1,6 @@
+[01:28:10] pipeline2=[31968, 39928] | crawler=[32976, 38660] | cache=4969 行/150 只
+[01:28:46] pipeline2=[31968, 39928] | crawler=[32976, 38660] | cache=5320 行/160 只
+[01:30:40] pipeline2=[] | crawler=[32976, 38660] | cache=5956 行/180 只
+[01:31:00] pipeline2=[] | crawler=[32976, 38660] | cache=6261 行/190 只
+[01:31:03] pipeline2=[] | crawler=[32976, 38660] | cache=6261 行/190 只
+[01:34:08] pipeline2=[] | crawler=[] | cache=7503 行/228 只

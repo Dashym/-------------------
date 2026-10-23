@@ -1,0 +1,99 @@
+FILE requirements.txt                                                   26 bytes
+FILE sales_receipt_ratio_improvement.py                              15065 bytes
+FILE test_sales_receipt_ratio_improvement.py                          7079 bytes
+FILE 销售收现比改善因子_明细.csv                                                 1946 bytes
+     rows=15 cols=['股票代码', '日期', '截面日期', '营业收入TTM', '销售收现TTM', '销售收现比', '去年同期销售收现比', '因子原始值', '因子去极值', 'sales_receipt_ratio_improvement']
+     unique stocks=5
+     stocks sample=000001, 000002, 000003, 000004, 000005
+     日期: 2024-03-31 ~ 2024-09-30 (n=3)
+     截面日期: 2024-03-31 ~ 2024-09-30 (n=3)
+FILE 销售收现比改善因子_月末截面.csv                                                643 bytes
+     rows=15 cols=['股票代码', '截面日期', 'sales_receipt_ratio_improvement']
+     unique stocks=5
+     stocks sample=000001, 000002, 000003, 000004, 000005
+     截面日期: 2024-03-31 ~ 2024-09-30 (n=3)
+
+>>> 价值因子
+    PB.py (8705)
+    PB_IC.py (4826)
+    PB_IC结果.txt (1369)
+    PB_Monotonicity.py (6367)
+    PB_Regression.py (5224)
+    PB_cleaned.csv (239840)
+    PB_raw.csv (469139)
+    PB_单调性结果.txt (2064)
+    PB_回归结果.txt (1433)
+    PE.py (8713)
+    PE_IC.py (4826)
+    PE_IC结果.txt (1291)
+    PE_Regression.py (5224)
+    PE_cleaned.csv (209140)
+    PE_raw.csv (459081)
+    PE_回归结果.txt (1353)
+    factor_env (0)
+
+>>> 动量因子（无效）
+    .venv (0)
+    momentum.py (6487)
+    momentum_ic.py (9997)
+    momentum_regression.py (12224)
+    requirements.txt (18)
+    test_momentum.py (2700)
+    test_momentum_ic.py (2748)
+    test_momentum_regression.py (3413)
+    动量因子_IC结果.txt (5377)
+    动量因子_cleaned.csv (1015998)
+    动量因子_raw.csv (502902)
+    动量因子_回归结果.txt (6733)
+
+>>> 技术壁垒升级
+    .venv (0)
+    __pycache__ (4096)
+    technical_barrier_test_common.py (10653)
+    technical_barrier_upgrade.py (10486)
+    technical_barrier_upgrade_ic_12m.py (5611)
+    technical_barrier_upgrade_ic_1m.py (6770)
+    technical_barrier_upgrade_monotonicity_12m.py (5895)
+    technical_barrier_upgrade_regression_12m.py (5835)
+    技术壁垒升级_IC_未来12个月.txt (5645)
+    技术壁垒升级_IC_未来1个月.txt (5129)
+    技术壁垒升级_单调性检验_未来12个月.txt (8519)
+    技术壁垒升级_回归结果_未来12个月.txt (6491)
+    技术壁垒升级_月末截面.csv (302960)
+
+>>> 毛利率稳定性（可以，小心）
+    .venv (0)
+    gross_margin_stability.py (15692)
+    gross_margin_stability_ic_12m.py (5599)
+    gross_margin_stability_monotonicity_12m.py (6381)
+    gross_margin_stability_regression_12m.py (6048)
+    requirements.txt (36)
+    stability_test_common.py (11244)
+    test_gross_margin_stability.py (6160)
+    test_stability_factor_tests.py (4222)
+    毛利率_cleaned.csv (551061)
+    毛利率_raw.csv (396510)
+    毛利率稳定性_IC_未来12个月.txt (4179)
+    毛利率稳定性_raw.csv (401806)
+    毛利率稳定性_单调性检验_未来12个月.txt (6065)
+    毛利率稳定性_回归结果_未来12个月.txt (4793)
+
+>>> 盈利因子
+    fm_result.txt (1444)
+    ic_result.txt (1332)
+    monotonicity_result.txt (1391)
+    profit_factor.csv (381296)
+    profit_factor_cleaned.csv (206192)
+    盈利因子.py (10777)
+    盈利因子IC.py (4497)
+    盈利因子单调性.py (6713)
+    盈利因子回归检测.py (5089)
+
+>>> 规模因子（很微弱）
+    规模因子的IC (4096)
+
+akshare status: FINISHED
+second_code = [{'行业代码': '801093.SI', '行业名称': '汽车零部件'}]
+cons_shape = (244, 5)
+cons_cols = ['序号', '证券代码', '证券名称', '最新权重', '计入日期']
+cons_head = [{'序号': 1, '证券代码': '000338', '证券名称': '潍柴动力', '最新权重': 10.1367, '计入日期': datetime.date(2021, 12, 13)}, {'序号': 2, '证券代码': '000559', '证券名称': '万向钱潮', '最新权重': 1.0442, '计入日期': datetime.date(2021, 12, 13)}, {'序号': 3, '证券代码': '000570', '证券名称': '苏常柴A', '最新权重': 0.1736, '计入日期': datetime.date(2021, 12, 13)}]

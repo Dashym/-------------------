@@ -1,0 +1,108 @@
+######## sales_receipt_ratio_improvement.py (1-107 of 350) ########
+   1| # -*- coding: utf-8 -*-
+   2| """
+   3| 销售收现比改善因子（TTM 同比改善）构建脚本
+   4| ==========================================
+   5| 现金流质量类因子：衡量企业"销售回款能力"相对去年同期的改善程度。
+   6| 
+   7| 因子定义：
+   8|     销售收现比        = 销售收现TTM / 营业收入TTM
+   9|                         （销售收现 = 现金流量表"销售商品、提供劳务收到的现金"）
+  10|     销售收现比改善因子 = 当期销售收现比 - 去年同期销售收现比
+  11|     因子为正 → 回款质量同比改善（方向：值越大越好）
+  12| 
+  13| 数据口径（与 07_财报爬取.py 一致）：
+  14|     1. 东财"按报告期"接口返回的是**年初至期末累计值**，先按"同年内差分"还原为单季度值；
+  15|     2. 单季度值在**连续季度网格**上滚动求和得到 TTM（缺季度 → NaN，不做插值）；
+  16|     3. 去年同期 = 季度网格 shift(4)（网格连续，等价于自然年同季度）；
+  17|     4. 可用日期 = 因子涉及的 8 个季度（当期 TTM 4 个 + 去年同期 TTM 4 个）中**最晚的公告日**，
+  18|        保证不使用尚未披露的数据。
+  19| 
+  20| 截面口径（防未来函数）：
+  21|     对每个"月末交易日"截面日 t，取该日之前（含当日）已公告的最新因子值；
+  22|     截面日上限 2024-11-01（因子形成日约束，严禁穿越）。
+  23| 
+  24| 输出：
+  25|     销售收现比改善因子_raw.csv   —— 月末截面因子值（IC / 分层 / 回归三大检验的输入）
+  26|     销售收现比改善因子_明细.csv  —— 季度级构建过程明细（审计用）
+  27| 
+  28| 运行环境：aksahre_demo/.venv（pandas / numpy）
+  29|     python sales_receipt_ratio_improvement.py
+  30| """
+  31| 
+  32| import sys
+  33| from pathlib import Path
+  34| 
+  35| import numpy as np
+  36| import pandas as pd
+  37| 
+  38| 
+  39| SCRIPT_DIR = Path(__file__).resolve().parent
+  40| BASE_DIR = SCRIPT_DIR.parent.parent / "aksahre_demo"
+  41| 
+  42| CRAWL_FILE = BASE_DIR / "raw_data" / "汽车零部件_销售收现与营业收入_原始.csv"
+  43| POOL_FILE = BASE_DIR / "汽车零部件_申万二级成分股.csv"
+  44| ADJUSTED_QUOTE_FILE = (
+  45|     BASE_DIR / "clean_temp" / "A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv"
+  46| )
+  47| 
+  48| FACTOR_FILE = SCRIPT_DIR / "销售收现比改善因子_raw.csv"
+  49| DETAIL_FILE = SCRIPT_DIR / "销售收现比改善因子_明细.csv"
+  50| 
+  51| FACTOR_COLUMN = "销售收现比改善因子"
+  52| # 因子形成日上限（严禁穿越）
+  53| MAX_CROSS_SECTION_DATE = pd.Timestamp("2024-11-01")
+  54| # 截面起始日
+  55| MIN_CROSS_SECTION_DATE = pd.Timestamp("2019-01-01")
+  56| 
+  57| CUMULATIVE_COLUMNS = ["营业总收入_累计", "销售收现_累计"]
+  58| 
+  59| 
+  60| def progress(message):
+  61|     """按仓库脚本惯例：即时打印并 flush。"""
+  62|     print(message, flush=True)
+  63| 
+  64| 
+  65| def normalize_codes(values):
+  66|     """统一股票代码为 6 位字符串。"""
+  67|     return (
+  68|         values.astype(str)
+  69|         .str.strip()
+  70|         .str.replace(r"\.0$", "", regex=True)
+  71|         .str.replace(r"\.(SZ|SH|BJ)$", "", case=False, regex=True)
+  72|         .str.replace(r"[^0-9]", "", regex=True)
+  73|         .str.zfill(6)
+  74|     )
+  75| 
+  76| 
+  77| def load_crawl_cache(path=CRAWL_FILE):
+  78|     """读取爬虫缓存（东财按报告期接口的累计值）。"""
+  79|     data = pd.read_csv(path, dtype={"股票代码": str}, encoding="utf-8-sig")
+  80|     data["股票代码"] = normalize_codes(data["股票代码"])
+  81|     data["报告期"] = pd.to_datetime(data["报告期"], errors="coerce").dt.normalize()
+  82|     data["首次公告日期"] = pd.to_datetime(data["首次公告日期"], errors="coerce").dt.normalize()
+  83|     for column in CUMULATIVE_COLUMNS:
+  84|         data[column] = pd.to_numeric(data[column], errors="coerce")
+  85|     data = data.dropna(subset=["股票代码", "报告期"])
+  86|     data = data.drop_duplicates(["股票代码", "报告期"], keep="last")
+  87|     data["季度序号"] = data["报告期"].dt.year * 4 + data["报告期"].dt.quarter
+  88|     return data.sort_values(["股票代码", "季度序号"], kind="mergesort").reset_index(drop=True)
+  89| 
+  90| 
+  91| def to_contiguous_grid(data):
+  92|     """长表 → 连续季度网格宽表（index=季度序号，columns=股票代码），缺失季度留 NaN。"""
+  93|     quarters = np.arange(int(data["季度序号"].min()), int(data["季度序号"].max()) + 1)
+  94|     codes = sorted(data["股票代码"].unique())
+  95|     grid = {}
+  96|     for column in CUMULATIVE_COLUMNS + ["首次公告日期"]:
+  97|         wide = data.pivot(index="季度序号", columns="股票代码", values=column)
+  98|         grid[column] = wide.reindex(index=quarters, columns=codes)
+  99|     return grid
+ 100| 
+ 101| 
+ 102| def to_single_quarter(cumulative):
+ 103|     """累计值 → 单季度值：Q1 取累计值本身，Q2/Q3/Q4 与上一季度（网格上一行）差分。
+ 104| 
+ 105|     网格连续，因此 shift(1) 即上一季度；上一季度缺失时结果为 NaN（不做插值）。
+ 106|     """
+ 107|     first_quarter = (cumulative.index % 4) == 1

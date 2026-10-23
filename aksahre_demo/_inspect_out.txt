@@ -1,0 +1,77 @@
+===== sales_receipt_ratio_ic.py (392 行) =====
+  残留 公告日之后第一个交易日 @ 行 [6]
+  残留 财报可用日期 @ 行 [6]
+    48 def _normalize_codes(values):
+    59 def _monthly_market_data(quotes, adjusted=False):
+   104 def _prepare_signals(factor):
+   126 def _next_day_returns(adjusted_quotes):
+   150 def _clean_cross_section(cross_section):
+   175 def _month_cross_section(
+   230 def _pearson(first, second):
+   241 def _spearman(first, second):
+   247 def _statistics(values):
+   265 def calculate_monthly_ic(
+   304 def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dates):
+   358 def main():
+
+===== sales_receipt_ratio_improvement.py (387 行) =====
+    60 def progress(message):
+    65 def normalize_codes(values):
+    77 def load_crawl_cache(path=CRAWL_FILE):
+    91 def to_contiguous_grid(data):
+   102 def to_single_quarter(cumulative):
+   112 def rolling_max_window(frame, window=4):
+   118 def float_ns_to_datetime(values):
+   127 def wide_frames_to_long(frames):
+   141 def build_ttm(data, trading_days=None):
+   193 def load_pool(path=POOL_FILE):
+   202 def load_trading_calendar(path=ADJUSTED_QUOTE_FILE):
+   209 def next_trading_day(notice_dates, trading_days):
+   225 def load_cross_section_dates(path=ADJUSTED_QUOTE_FILE):
+   236 def build_month_end_panel(detail, pool, cross_section_dates):
+   257 def _format_date_columns(frame, columns):
+   264 def to_cross_section_file(panel):
+   282 def to_detail_file(detail):
+   300 def quarter_to_period_end(quarter_number):
+   306 def describe_panel(panel, detail, pool, cross_section_dates):
+   345 def main():
+
+===== sales_receipt_ratio_monotonicity.py (271 行) =====
+    50 def _norm_cdf(value):
+    54 def _t_pvalue(t_stat, degrees):
+    60 def _significance(p_value):
+    72 def calculate_monthly_quintile_returns(
+   118 def _summarize(results, quintile_count=QUINTILE_COUNT):
+   154 def _monotonicity_label(summaries, quintile_count=QUINTILE_COUNT):
+   168 def render_report(results, summaries, spread, factor_rows, factor_dates, market_dates, adjusted_dates):
+   234 def main():
+
+===== sales_receipt_ratio_regression.py (237 行) =====
+    48 def _norm_cdf(value):
+    52 def _t_pvalue(t_stat, degrees):
+    58 def _significance(p_value):
+    70 def calculate_monthly_regressions(
+   115 def _fama_macbeth(regressions):
+   134 def render_report(regressions, summaries, factor_rows, factor_dates, market_dates, adjusted_dates):
+   201 def main():
+
+===== test_sales_receipt_ratio_ic.py (150 行) =====
+    20 def synthetic_dataset(month_pairs):
+    66 def test_next_day_returns_uses_following_trading_day(self):
+    82 def test_factor_must_be_available_before_month_end(self):
+    89 def test_return_realization_cap_excludes_november_snapshot(self):
+   106 def test_october_snapshot_is_kept_within_return_cap(self):
+   121 def test_cross_section_is_standardized_and_ordered_by_return(self):
+   137 def test_spearman_and_pearson(self):
+
+===== test_sales_receipt_ratio_monotonicity.py (48 行) =====
+    12 def test_quintile_returns_increase_with_factor(self):
+    31 def test_min_cross_section_filters_small_months(self):
+    38 def test_quintile_count_must_be_at_least_two(self):
+
+===== test_sales_receipt_ratio_regression.py (36 行) =====
+    11 def test_fama_macbeth_beta_is_positive_when_returns_follow_factor(self):
+    27 def test_min_cross_section_filters_small_months(self):
+
+爬虫缓存：2108 行，60 只股票
+日志尾部：爬取进度：40/208，已保存 汽车零部件_销售收现与营业收入_原始.csv

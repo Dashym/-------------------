@@ -1,0 +1,54 @@
+﻿== 因子库 目录树(目录) ==
+C:\Users\Heyuanhang\Desktop\因子库\价值因子
+C:\Users\Heyuanhang\Desktop\因子库\动量因子（无效）
+C:\Users\Heyuanhang\Desktop\因子库\存货周转改善率（good）
+C:\Users\Heyuanhang\Desktop\因子库\技术壁垒升级
+C:\Users\Heyuanhang\Desktop\因子库\毛利率稳定性（可以，小心）
+C:\Users\Heyuanhang\Desktop\因子库\盈利因子
+C:\Users\Heyuanhang\Desktop\因子库\研发费用率（用不了）
+C:\Users\Heyuanhang\Desktop\因子库\规模因子（很微弱）
+C:\Users\Heyuanhang\Desktop\因子库\销售收现比改善因子
+C:\Users\Heyuanhang\Desktop\因子库\动量因子（无效）\.venv
+C:\Users\Heyuanhang\Desktop\因子库\动量因子（无效）\.venv\Include
+C:\Users\Heyuanhang\Desktop\因子库\动量因子（无效）\.venv\Lib
+C:\Users\Heyuanhang\Desktop\因子库\动量因子（无效）\.venv\Scripts
+C:\Users\Heyuanhang\Desktop\因子库\存货周转改善率（good）\.venv
+C:\Users\Heyuanhang\Desktop\因子库\存货周转改善率（good）\.venv\Include
+C:\Users\Heyuanhang\Desktop\因子库\存货周转改善率（good）\.venv\Lib
+C:\Users\Heyuanhang\Desktop\因子库\存货周转改善率（good）\.venv\Scripts
+C:\Users\Heyuanhang\Desktop\因子库\技术壁垒升级\.venv
+C:\Users\Heyuanhang\Desktop\因子库\技术壁垒升级\.venv\Include
+C:\Users\Heyuanhang\Desktop\因子库\技术壁垒升级\.venv\Lib
+C:\Users\Heyuanhang\Desktop\因子库\技术壁垒升级\.venv\Scripts
+C:\Users\Heyuanhang\Desktop\因子库\毛利率稳定性（可以，小心）\.venv
+C:\Users\Heyuanhang\Desktop\因子库\毛利率稳定性（可以，小心）\.venv\Include
+C:\Users\Heyuanhang\Desktop\因子库\毛利率稳定性（可以，小心）\.venv\Lib
+C:\Users\Heyuanhang\Desktop\因子库\毛利率稳定性（可以，小心）\.venv\Scripts
+C:\Users\Heyuanhang\Desktop\因子库\研发费用率（用不了）\.venv
+C:\Users\Heyuanhang\Desktop\因子库\研发费用率（用不了）\.venv\Include
+C:\Users\Heyuanhang\Desktop\因子库\研发费用率（用不了）\.venv\Lib
+C:\Users\Heyuanhang\Desktop\因子库\研发费用率（用不了）\.venv\Scripts
+C:\Users\Heyuanhang\Desktop\因子库\规模因子（很微弱）\规模因子的IC
+== 动量因子（无效）文件 ==
+      6487  momentum.py
+      9997  momentum_ic.py
+     12224  momentum_regression.py
+        18  requirements.txt
+      2700  test_momentum.py
+      2748  test_momentum_ic.py
+      3413  test_momentum_regression.py
+   1015998  动量因子_cleaned.csv
+      5377  动量因子_IC结果.txt
+    502902  动量因子_raw.csv
+      6733  动量因子_回归结果.txt
+== 销售收现比改善因子文件夹 ==
+        26  requirements.txt
+      7406  sales_receipt_cash_flow_crawler.py
+     15583  sales_receipt_ratio_improvement.py
+     46287  _crawler_run.err
+       277  _crawler_run.log
+== 后复权清洗行情表头 ==
+股票代码,日期,开盘,最高,最低,收盘,成交量,成交额,换手率
+000030,2019-01-02,2.7145975,2.7439445,2.699924,2.70726075,12134.47,4489006.29,0.069318
+000030,2019-01-03,2.70726075,2.7439445,2.67791375,2.699924,13905.57,5143289.56,0.079435
+000030,2019-01-04,2.6852505,2.80997525,2.67791375,2.80997525,36338.33,13671400.73,0.207581

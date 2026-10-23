@@ -1,0 +1,10 @@
+﻿
+LastWriteTime      Length FullName                                  
+-------------      ------ --------                                  
+2026/10/17 1:14:00      0 C:\Users\Heyuanhang\Desktop\aksahre_dem...
+
+
+股票池 228 只，缓存已有 0 只，本次待爬 228 只
+输出文件：C:\Users\Heyuanhang\Desktop\aksahre_demo\raw_data\汽车零部件_销售收现与营业收入_原始.csv
+爬取进度：10/228，已保存 汽车零部件_销售收现与营业收入_原始.csv
+爬取进度：20/228，已保存 汽车零部件_销售收现与营业收入_原始.csv

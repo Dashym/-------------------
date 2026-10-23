@@ -1,0 +1,113 @@
+######## sales_receipt_ratio_improvement.py (276-387 of 394) ########
+ 276|         "报告期",
+ 277|         "首次公告日期",
+ 278|         "营业收入TTM",
+ 279|         "销售收现TTM",
+ 280|         "销售收现比",
+ 281|         "去年同期销售收现比",
+ 282|         FACTOR_COLUMN,
+ 283|         "上市日",
+ 284|         "截面月份",
+ 285|     ]
+ 286|     return _format_date_columns(panel.loc[:, columns], ["可用日期", "报告期", "首次公告日期", "上市日"])
+ 287| 
+ 288| 
+ 289| def to_detail_file(detail):
+ 290|     """季度级构建明细（审计用）。"""
+ 291|     columns = [
+ 292|         "股票代码",
+ 293|         "报告期",
+ 294|         "首次公告日期",
+ 295|         "可用日期",
+ 296|         "营业收入TTM",
+ 297|         "销售收现TTM",
+ 298|         "销售收现比",
+ 299|         "去年同期销售收现比",
+ 300|         FACTOR_COLUMN,
+ 301|     ]
+ 302|     result = _format_date_columns(detail.loc[:, columns], ["报告期", "首次公告日期", "可用日期"])
+ 303|     return result.sort_values(["股票代码", "报告期"], kind="mergesort").reset_index(drop=True)
+ 304| 
+ 305| 
+ 306| 
+ 307| def quarter_to_period_end(quarter_number):
+ 308|     """季度序号（年*4+季）→ 报告期（季末日期）。"""
+ 309|     year, quarter = divmod(int(quarter_number) - 1, 4)
+ 310|     return pd.Timestamp(year=year, month=(quarter + 1) * 3, day=1) + pd.offsets.MonthEnd(0)
+ 311| 
+ 312| 
+ 313| def describe_panel(panel, detail, pool, cross_section_dates):
+ 314|     """构建过程摘要（打印用）。"""
+ 315|     lines = [
+ 316|         "=" * 72,
+ 317|         "销售收现比改善因子构建完成",
+ 318|         "=" * 72,
+ 319|         "",
+ 320|         "口径：",
+ 321|         "  销售收现比 = 销售收现TTM / 营业收入TTM，TTM 由连续 4 个季度单季值滚动求和",
+ 322|         "  因子值     = 当期销售收现比 - 去年同期销售收现比（正值 = 回款质量同比改善）",
+ 323|         "  可用日期   = 因子涉及 8 个季度公告日中的最晚值，顺延至其后第一个交易日（不使用未来财报）",
+ 324|         f"  截面日     = 月末交易日，区间上限 {MAX_CROSS_SECTION_DATE:%Y-%m-%d}（因子形成日约束）",
+ 325|         "",
+ 326|         "数据概况：",
+ 327|         f"  股票池（申万二级汽车零部件，含动态上市/纳入过滤）：{len(pool)} 只",
+ 328|         f"  截面日数量：{len(cross_section_dates)} 期",
+ 329|         f"  季度级因子记录：{len(detail):,} 条，报告期 "
+ 330|         f"{detail['报告期'].min()} ~ {detail['报告期'].max()}",
+ 331|         f"  月末截面观测：{len(panel):,} 条，截面 {panel['可用日期'].min():%Y-%m-%d} ~ "
+ 332|         f"{panel['可用日期'].max():%Y-%m-%d}",
+ 333|     ]
+ 334|     per_section = panel.groupby("可用日期")["股票代码"].count()
+ 335|     lines.extend(
+ 336|         [
+ 337|             f"  平均股票数/截面：{per_section.mean():.1f}，范围 {per_section.min()} ~ {per_section.max()}",
+ 338|             "",
+ 339|             "因子分布（月末截面原始值）：",
+ 340|             f"  均值 {panel[FACTOR_COLUMN].mean():.6f}，标准差 {panel[FACTOR_COLUMN].std(ddof=1):.6f}",
+ 341|             f"  最小值 {panel[FACTOR_COLUMN].min():.6f}，最大值 {panel[FACTOR_COLUMN].max():.6f}",
+ 342|             f"  正值占比 {(panel[FACTOR_COLUMN] > 0).mean():.2%}",
+ 343|             "",
+ 344|             f"已输出 → {FACTOR_FILE.name}（月末截面因子）",
+ 345|             f"已输出 → {DETAIL_FILE.name}（季度级明细）",
+ 346|             "=" * 72,
+ 347|         ]
+ 348|     )
+ 349|     return "\n".join(lines)
+ 350| 
+ 351| 
+ 352| def main():
+ 353|     for input_file in (CRAWL_FILE, POOL_FILE, ADJUSTED_QUOTE_FILE):
+ 354|         if not input_file.is_file():
+ 355|             progress(f"[错误] 输入文件不存在：{input_file}")
+ 356|             return 1
+ 357| 
+ 358|     progress("[1/6] 读取爬虫缓存（销售收现 / 营业总收入 累计值）...")
+ 359|     crawl = load_crawl_cache()
+ 360|     progress(
+ 361|         f"  {crawl['股票代码'].nunique()} 只股票，{len(crawl):,} 条，报告期 "
+ 362|         f"{crawl['报告期'].min():%Y-%m-%d} ~ {crawl['报告期'].max():%Y-%m-%d}"
+ 363|     )
+ 364| 
+ 365|     progress("[2/6] 读取交易日历（公告日顺延至次一交易日）...")
+ 366|     trading_days = load_trading_calendar()
+ 367|     progress(
+ 368|         f"  交易日历 {len(trading_days)} 个交易日，"
+ 369|         f"{pd.Timestamp(trading_days[0]):%Y-%m-%d} ~ {pd.Timestamp(trading_days[-1]):%Y-%m-%d}"
+ 370|     )
+ 371| 
+ 372|     progress("[3/6] 累计值 → 单季度值 → TTM → 销售收现比同比改善 ...")
+ 373|     detail = build_ttm(crawl, trading_days)
+ 374|     valid = detail.dropna(subset=[FACTOR_COLUMN])
+ 375|     progress(f"  季度级因子有效记录 {len(valid):,} 条")
+ 376| 
+ 377|     progress("[4/6] 读取股票池与月末截面日 ...")
+ 378|     pool = load_pool()
+ 379|     cross_section_dates = load_cross_section_dates()
+ 380|     progress(f"  股票池 {len(pool)} 只，截面日 {len(cross_section_dates)} 期")
+ 381| 
+ 382|     progress("[5/6] 生成月末截面面板（严格使用已公告数据）...")
+ 383|     panel = build_month_end_panel(detail, pool, cross_section_dates)
+ 384| 
+ 385|     progress("[6/6] 写出因子文件 ...")
+ 386|     to_cross_section_file(panel).to_csv(FACTOR_FILE, index=False, encoding="utf-8-sig")
+ 387|     to_detail_file(detail).to_csv(DETAIL_FILE, index=False, encoding="utf-8-sig")

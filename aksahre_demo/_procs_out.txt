@@ -1,0 +1,27 @@
+### python 进程
+
+ProcessId CommandLine                                                                                                                                                                       
+--------- -----------                                                                                                                                                                       
+    27848 C:\Users\Heyuanhang\.codegeex\mamba\envs\codegeex-agent\pythonw.exe CodeGeeXAgent.py --port 11435 --python_cmd C:\Users\Heyuanhang\.codegeex\mamba\envs\codegeex-agent\pythonw.exe
+    20180 C:\Users\Heyuanhang\.codegeex\mamba\envs\codegeex-agent\pythonw.exe -m codegeex_mcp_tools.frontend                                                                                
+    42052 C:\Users\Heyuanhang\.codegeex\mamba\envs\codegeex-agent\pythonw.exe -m codegeex_mcp_tools.backend                                                                                 
+    42016 C:\Users\Heyuanhang\.codegeex\mamba\envs\codegeex-agent\pythonw.exe -m codegeex_mcp_tools.terminal                                                                                
+    32976 "C:\Users\Heyuanhang\Desktop\aksahre_demo\.venv\Scripts\python.exe" sales_receipt_cash_flow_crawler.py                                                                            
+    38660 "C:\Users\Heyuanhang\AppData\Local\Programs\Python\Python311\python.exe" sales_receipt_cash_flow_crawler.py                                                                       
+     8768 "C:\Users\Heyuanhang\Desktop\aksahre_demo\.venv\Scripts\python.exe" _run_pipeline.py                                                                                              
+    29900 "C:\Users\Heyuanhang\AppData\Local\Programs\Python\Python311\python.exe" _run_pipeline.py                                                                                         
+    42688 c:\Users\Heyuanhang\Desktop\aksahre_demo\.venv\Scripts\python.exe sales_receipt_ratio_ic.py                                                                                       
+     4944 "C:\Users\Heyuanhang\AppData\Local\Programs\Python\Python311\python.exe" sales_receipt_ratio_ic.py                                                                                
+    31132 "C:\Users\Heyuanhang\Desktop\aksahre_demo\.venv\Scripts\python.exe" _procs.py                                                                                                     
+    40432 "C:\Users\Heyuanhang\AppData\Local\Programs\Python\Python311\python.exe" _procs.py                                                                                                
+
+
+
+
+### 缓存：4217 行，去重前 4217 只，去重后 130 只
+代码样例：['000030', '000338', '000559', '000570', '000581', '000589', '000599', '000678']
+报告期样例：['2017-03-31', '2017-03-31 00:00:00', '2017-06-30', '2017-06-30 00:00:00', '2017-09-30']
+### 缓存文件最后 3 行
+600148,2025-12-31 00:00:00,2026-04-25 00:00:00,766157656.56,681290049.89
+600148,2026-03-31 00:00:00,2026-04-25 00:00:00,222245323.47,181342846.24
+600148,2026-06-30 00:00:00,2026-08-26 00:00:00,453815605.57,366652631.25

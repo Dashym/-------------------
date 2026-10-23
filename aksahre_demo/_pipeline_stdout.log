@@ -1,0 +1,23 @@
+01:21:00 | === 流水线启动 ===
+01:21:00 | 爬虫进度：2482 行 / 70 只
+01:21:24 | 爬虫进度：2860 行 / 80 只
+01:22:03 | 爬虫进度：3189 行 / 90 只
+01:22:45 | 爬虫进度：3488 行 / 100 只
+01:23:24 | 爬虫进度：3777 行 / 110 只
+01:23:57 | 爬虫进度：4012 行 / 120 只
+01:24:42 | 爬虫进度：4217 行 / 130 只
+01:26:13 | 爬虫结束：4217 行 / 130 只（90 秒无新增）
+01:26:13 | 开始 因子构建：sales_receipt_ratio_improvement.py
+01:26:14 | 因子构建 结束：returncode=0，用时 1.1 秒，日志=_sales_receipt_ratio_improvement.log
+01:26:14 | 开始 IC-IR 检验：sales_receipt_ratio_ic.py
+01:26:17 | IC-IR 检验 结束：returncode=0，用时 2.8 秒，日志=_sales_receipt_ratio_ic.log
+01:26:17 | 开始 分层单调性检验：sales_receipt_ratio_monotonicity.py
+01:26:19 | 分层单调性检验 结束：returncode=0，用时 2.7 秒，日志=_sales_receipt_ratio_monotonicity.log
+01:26:19 | 开始 Fama-MacBeth 回归：sales_receipt_ratio_regression.py
+01:26:22 | Fama-MacBeth 回归 结束：returncode=0，用时 2.8 秒，日志=_sales_receipt_ratio_regression.log
+01:26:22 | === 汇总 ===
+01:26:22 |   因子构建             rc=0  1.1 秒  sales_receipt_ratio_improvement.py
+01:26:22 |   IC-IR 检验         rc=0  2.8 秒  sales_receipt_ratio_ic.py
+01:26:22 |   分层单调性检验          rc=0  2.7 秒  sales_receipt_ratio_monotonicity.py
+01:26:22 |   Fama-MacBeth 回归  rc=0  2.8 秒  sales_receipt_ratio_regression.py
+01:26:22 | 全部流程结束

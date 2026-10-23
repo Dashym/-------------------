@@ -1,0 +1,69 @@
+### sales_receipt_ratio_improvement
+  ADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/clean_temp/A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv')
+      存在 = True
+  BASE_DIR = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo')
+      存在 = True
+  CRAWL_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/raw_data/汽车零部件_销售收现与营业收入_原始.csv')
+      存在 = True
+  DETAIL_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_明细.csv')
+      存在 = False
+  FACTOR_COLUMN = '销售收现比改善因子'
+  FACTOR_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_raw.csv')
+      存在 = False
+  MAX_CROSS_SECTION_DATE = Timestamp('2024-11-01 00:00:00')
+  MIN_CROSS_SECTION_DATE = Timestamp('2019-01-01 00:00:00')
+  POOL_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/汽车零部件_申万二级成分股.csv')
+      存在 = True
+  SCRIPT_DIR = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子')
+      存在 = True
+### sales_receipt_ratio_ic
+  ADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/clean_temp/A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv')
+      存在 = True
+  BASE_DIR = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo')
+      存在 = True
+  FACTOR_COLUMN = '销售收现比改善因子'
+  FACTOR_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_raw.csv')
+      存在 = False
+  MAX_FACTOR_ASOF = Timestamp('2024-11-01 00:00:00')
+  MAX_RETURN_DATE = Timestamp('2024-11-02 00:00:00')
+  MIN_CROSS_SECTION_SIZE = 10
+  OUTPUT_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_IC结果.txt')
+      存在 = False
+  SCRIPT_DIR = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子')
+      存在 = True
+  UNADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/A股日线_20190101-20260331_不复权.csv')
+      存在 = True
+### sales_receipt_ratio_monotonicity
+  ADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/clean_temp/A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv')
+      存在 = True
+  FACTOR_COLUMN = '销售收现比改善因子'
+  FACTOR_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_raw.csv')
+      存在 = False
+  MAX_FACTOR_ASOF = Timestamp('2024-11-01 00:00:00')
+  MAX_RETURN_DATE = Timestamp('2024-11-02 00:00:00')
+  MIN_CROSS_SECTION_SIZE = 10
+  OUTPUT_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_单调性结果.txt')
+      存在 = False
+  PERIODS_PER_YEAR = 12
+  QUINTILE_COUNT = 5
+  SCRIPT_DIR = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子')
+      存在 = True
+  UNADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/A股日线_20190101-20260331_不复权.csv')
+      存在 = True
+### sales_receipt_ratio_regression
+  ADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/clean_temp/A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv')
+      存在 = True
+  FACTOR_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_raw.csv')
+      存在 = False
+  MAX_FACTOR_ASOF = Timestamp('2024-11-01 00:00:00')
+  MAX_RETURN_DATE = Timestamp('2024-11-02 00:00:00')
+  MIN_CROSS_SECTION_SIZE = 10
+  OUTPUT_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子/销售收现比改善因子_回归结果.txt')
+      存在 = False
+  SCRIPT_DIR = WindowsPath('C:/Users/Heyuanhang/Desktop/因子库/销售收现比改善因子')
+      存在 = True
+  UNADJUSTED_QUOTE_FILE = WindowsPath('C:/Users/Heyuanhang/Desktop/aksahre_demo/A股日线_20190101-20260331_不复权.csv')
+      存在 = True
+
+因子文件存在：False
+明细文件存在：False
