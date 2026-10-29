@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-BASE_DIR = Path(r"C:\Users\Heyuanhang\Desktop\aksahre_demo")
+BASE_DIR = Path(r"C:\Users\Heyuanhang\Desktop\基于多因子模型的申万汽车零部件选股策略\aksahre_demo")
 LIB_DIR = BASE_DIR.parent / "因子库"
 GM_FACTOR_FILE = LIB_DIR / "毛利率稳定性（可以，小心）" / "毛利率稳定性_raw.csv"
 INV_FACTOR_FILE = LIB_DIR / "存货周转改善率（good）" / "存货周转改善率_raw.csv"
@@ -17,7 +17,7 @@ UNADJUSTED_QUOTE_FILE = (
 ADJUSTED_QUOTE_FILE = (
     BASE_DIR / "clean_temp" / "A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv"
 )
-DST = Path(r"C:\Users\Heyuanhang\Desktop\综合比较打分法和回归法的回测结果")
+DST = Path(r"C:\Users\Heyuanhang\Desktop\基于多因子模型的申万汽车零部件选股策略\综合比较打分法和回归法的回测结果")
 
 GM_FACTOR_COLUMN = "毛利率稳定性"
 INV_FACTOR_COLUMN = "存货周转改善率（TTM同比）"
@@ -29,7 +29,7 @@ HOLDING_MONTHS = 12
 HAC_MAX_LAGS = 11
 
 TRAIN_START = pd.Period("2022-05", freq="M")
-TRAIN_END = pd.Period("2024-12", freq="M")
+TRAIN_END = pd.Period("2024-02", freq="M")
 OOS_START = pd.Period("2025-03", freq="M")
 OOS_END = pd.Period("2026-03", freq="M")
 
@@ -598,9 +598,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-
-
-
-
