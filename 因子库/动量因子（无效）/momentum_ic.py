@@ -18,6 +18,7 @@ FACTOR_VALUE_COLUMN = "动量因子_cleaned"
 FACTOR_REQUIRED_COLUMNS = {"股票代码", "截面日期", FACTOR_VALUE_COLUMN}
 QUOTE_REQUIRED_COLUMNS = {"股票代码", "日期", "收盘"}
 MIN_STOCKS_PER_CROSS_SECTION = 10
+IN_SAMPLE_END = "2024-12-31"
 
 
 def prepare_forward_returns(quotes):
@@ -226,6 +227,10 @@ def main():
             return 1
 
     factor = pd.read_csv(FACTOR_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
+    factor["_dt"] = pd.to_datetime(factor["截面日期"], errors="raise")
+    factor = factor[factor["_dt"] <= IN_SAMPLE_END].copy()
+    factor.drop(columns=["_dt"], inplace=True)
+    log.info("样本内截止 %s，保留因子记录 %d 条", IN_SAMPLE_END, len(factor))
     quotes = pd.read_csv(QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
     ic_results = calculate_cross_sectional_ic(factor, quotes)
     factor_dates = pd.to_datetime(factor["截面日期"], errors="raise")

@@ -54,7 +54,8 @@ p('  有效收益: {:,}条 (已过滤涨跌停)'.format(sum(len(v) for v in fr.v
 p('')
 
 p('[3/4] 逐期计算 Rank IC / Pearson IC...')
-ic = []; fd = sorted(fb)
+IN_SAMPLE_END = "2024-12-31"
+ic = []; fd = [d for d in sorted(fb) if d <= IN_SAMPLE_END]
 for di, d in enumerate(fd):
     fdd = fb[d]; rd = fr.get(d, {})
     cm = sorted(set(fdd) & set(rd)); n = len(cm)

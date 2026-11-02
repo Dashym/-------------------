@@ -17,6 +17,7 @@ QUOTE_FILE = BASE_DIR / "A股日线_20190101-20260331_后复权.csv"
 OUTPUT_FILE = SCRIPT_DIR / "动量因子_回归结果.txt"
 FACTOR_VALUE_COLUMN = "动量因子_cleaned"
 MIN_STOCKS_PER_CROSS_SECTION = 10
+IN_SAMPLE_END = "2024-12-31"
 
 
 def prepare_forward_returns(quotes):
@@ -288,6 +289,10 @@ def main():
             return 1
 
     factor = pd.read_csv(FACTOR_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
+    factor["_dt"] = pd.to_datetime(factor["截面日期"], errors="raise")
+    factor = factor[factor["_dt"] <= IN_SAMPLE_END].copy()
+    factor.drop(columns=["_dt"], inplace=True)
+    log.info("样本内截止 %s，保留因子记录 %d 条", IN_SAMPLE_END, len(factor))
     quotes = pd.read_csv(QUOTE_FILE, dtype={"股票代码": str}, encoding="utf-8-sig")
     regressions = run_fama_macbeth_regression(factor, quotes)
     factor_dates = pd.to_datetime(factor["截面日期"], errors="raise")

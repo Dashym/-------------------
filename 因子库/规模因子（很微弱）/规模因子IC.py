@@ -1,9 +1,11 @@
-import csv, numpy as np, sys
+import csv, numpy as np, sys, os
 from collections import defaultdict
 
-FACTOR = r'c:\Users\Heyuanhang\Desktop\因子库\scale_factor_cleaned_v2.csv'
-QUOTE  = r'c:\Users\Heyuanhang\Desktop\aksahre_demo\clean_temp\A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv'
-OUT    = r'c:\Users\Heyuanhang\Desktop\因子库\ic_result.txt'
+HERE   = os.path.dirname(os.path.abspath(__file__))
+FACTOR = os.path.join(HERE, '规模因子的IC', 'scale_factor_cleaned_v2.csv')
+BASE   = os.path.dirname(os.path.dirname(HERE))
+QUOTE  = os.path.join(BASE, 'aksahre_demo', 'clean_temp', 'A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv')
+OUT    = os.path.join(HERE, 'ic_result.txt')
 
 lines = []
 def p(s):
@@ -49,7 +51,8 @@ p('  有效收益: {:,}条 (已过滤涨跌停)'.format(sum(len(v) for v in fr.v
 p('')
 
 p('[3/4] 逐期计算 Rank IC / Pearson IC...')
-ic=[]; fd=sorted(fb)
+IN_SAMPLE_END = "2024-12-31"
+ic=[]; fd=[d for d in sorted(fb) if d <= IN_SAMPLE_END]
 for di,d in enumerate(fd):
     fdd=fb[d]; rd=fr.get(d,{})
     cm=sorted(set(fdd)&set(rd)); n=len(cm)

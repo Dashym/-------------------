@@ -59,7 +59,8 @@ del q
 p('  有效收益: {:,}条 (已过滤涨跌停)'.format(sum(len(v) for v in fr.values())))
 
 p('[3/4] 逐期 OLS 回归...')
-fd = sorted(fb)
+IN_SAMPLE_END = "2024-12-31"
+fd = [d for d in sorted(fb) if d <= IN_SAMPLE_END]
 betas = []; alphas = []; r2s = []; nobs_list = []
 for di, d in enumerate(fd):
     fdd = fb[d]; rd = fr.get(d, {})
