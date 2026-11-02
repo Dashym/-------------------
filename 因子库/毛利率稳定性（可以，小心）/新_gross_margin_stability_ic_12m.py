@@ -8,10 +8,12 @@ from stability_test_common import (
     ADJUSTED_QUOTE_FILE,
     FACTOR_FILE,
     FORWARD_HORIZON_MONTHS,
+    HAC_MAX_LAGS,
     MIN_CROSS_SECTION_SIZE,
     SCRIPT_DIR,
     UNADJUSTED_QUOTE_FILE,
     load_inputs,
+    newey_west_mean_standard_error,
     prepare_monthly_cross_sections,
     report_dates,
 )
@@ -19,7 +21,7 @@ from stability_test_common import (
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
-OUTPUT_FILE = SCRIPT_DIR / "新_毛利率稳定性_IC_未来12个月.txt"
+OUTPUT_FILE = SCRIPT_DIR / "新_毛利率稳定性_IC_未来12个月_HAC.txt"
 IN_SAMPLE_END = "2024-03"
 
 
@@ -49,7 +51,11 @@ def _summary(values):
     values = values.dropna()
     mean = values.mean()
     std = values.std(ddof=1) if len(values) > 1 else float("nan")
-    se = std / np.sqrt(len(values)) if len(values) > 1 else float("nan")
+    se = (
+        newey_west_mean_standard_error(values, HAC_MAX_LAGS)
+        if len(values) > HAC_MAX_LAGS
+        else float("nan")
+    )
     return {
         "mean": mean,
         "std": std,
@@ -79,7 +85,7 @@ def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dat
         "  收益：未来 12 个月累计后复权收益 = t+12 月末后复权收盘 / t 月末后复权收盘 - 1",
         "  Rank IC 为 Spearman 秩相关；Pearson IC 为线性相关",
         f"  每期最少有效股票数：{MIN_CROSS_SECTION_SIZE}",
-        "  IC 的 t-stat 为常规均值检验，未对重叠收益导致的序列相关做 HAC 调整",
+        "  IC 的 t-stat 经 Newey-West HAC（Bartlett 核，滞后 11）调整",
         "",
         "数据概况：",
         f"  因子记录：{factor_rows:,} 条，可用日期 {factor_dates[0]} ~ {factor_dates[1]}",
@@ -94,7 +100,7 @@ def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dat
         f"{'IC 标准差':<16}{rank['std']:>14.4f}{pearson['std']:>16.4f}",
         f"{'ICIR':<16}{rank['ir']:>14.4f}{pearson['ir']:>16.4f}",
         f"{'IC > 0 占比':<16}{rank['positive']:>13.2%}{pearson['positive']:>15.2%}",
-        f"{'常规 t-stat':<16}{rank['t']:>14.4f}{pearson['t']:>16.4f}",
+        f"{'HAC t-stat':<16}{rank['t']:>14.4f}{pearson['t']:>16.4f}",
         "",
         f"Rank IC 均值={rank['mean']:.4f}，ICIR={rank['ir']:.4f}；请结合样本长度及其他检验判断，不代表未来表现。",
         "",

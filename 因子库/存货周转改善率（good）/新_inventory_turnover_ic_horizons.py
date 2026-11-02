@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from inventory_turnover_ic import (
+from 新_inventory_turnover_ic import (
     ADJUSTED_QUOTE_FILE,
     FACTOR_COLUMN,
     FACTOR_FILE,
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 IN_SAMPLE_END = pd.Period("2024-03", freq="M")
 HORIZONS = [1, 3, 6, 12]
-OUTPUT_FILE = SCRIPT_DIR / "新_存货周转改善率_IC_多期限对比.txt"
+OUTPUT_FILE = SCRIPT_DIR / "新_存货周转改善率_IC_多期限对比_HAC.txt"
 
 
 def calculate_ic_for_horizon(factor, unadjusted_quotes, adjusted_quotes, horizon):
@@ -165,7 +165,7 @@ def main():
         "  月末截面使用截至该月最后交易日已公告的最新因子值（不使用未来财报）",
         "  对月末截面重新执行 MAD(5倍) 去极值、对数流通市值回归中性化及 Z-score",
         "  收益：未来 N 个月累计后复权收益 = t+N 月末后复权收盘 / t 月末后复权收盘 - 1",
-        "  Rank IC：Spearman 秩相关；Pearson IC：线性相关；t-stat 未做 HAC 调整",
+        "  Rank IC：Spearman 秩相关；Pearson IC：线性相关；t-stat 经 Newey-West HAC 调整",
         f"  每期最少有效股票数：{MIN_CROSS_SECTION_SIZE}",
         "",
         "持有期     有效截面数     RankIC均值     RankICIR    Rank t-stat    PearsonIC均值    PearsonICIR    Pearson t-stat    综合判断",

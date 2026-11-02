@@ -18,7 +18,7 @@ ADJUSTED_QUOTE_FILE = (
     / "clean_temp"
     / "A股日线_20190101-20260331_后复权_去重排序_剔除异常_格式统一.csv"
 )
-OUTPUT_FILE = SCRIPT_DIR / "新_存货周转改善率_IC_未来12个月.txt"
+OUTPUT_FILE = SCRIPT_DIR / "新_存货周转改善率_IC_未来12个月_HAC.txt"
 IN_SAMPLE_END = pd.Period("2024-03", freq="M")
 FACTOR_COLUMN = "存货周转改善率（TTM同比）"
 MIN_CROSS_SECTION_SIZE = 10
@@ -212,6 +212,19 @@ def calculate_monthly_ic(
     )
 
 
+def _newey_west_se(values, max_lags=11):
+    values = np.asarray(values, dtype=float)
+    count = len(values)
+    residuals = values - values.mean()
+    long_run_variance = float(np.dot(residuals, residuals) / count)
+    for lag in range(1, max_lags + 1):
+        weight = 1 - lag / (max_lags + 1)
+        covariance = float(np.dot(residuals[lag:], residuals[:-lag]) / count)
+        long_run_variance += 2 * weight * covariance
+    variance_of_mean = long_run_variance / count * count / (count - 1)
+    return float(np.sqrt(max(variance_of_mean, 0.0)))
+
+
 def _statistics(values):
     values = values.dropna()
     if values.empty:
@@ -224,7 +237,9 @@ def _statistics(values):
         }
     mean = values.mean()
     standard_deviation = values.std(ddof=1) if len(values) > 1 else float("nan")
-    standard_error = standard_deviation / np.sqrt(len(values))
+    standard_error = (
+        _newey_west_se(values, 11) if len(values) > 11 else float("nan")
+    )
     return {
         "mean": mean,
         "std": standard_deviation,
@@ -257,7 +272,7 @@ def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dat
         "  Rank IC：因子与未来 12 个月累计收益的 Spearman 秩相关；Pearson IC：线性相关",
         f"  最少有效股票数/截面：{MIN_CROSS_SECTION_SIZE}",
         "  IR：月度 IC 均值 / 月度 IC 样本标准差（ddof=1）",
-        "  t-stat 未做 Newey-West 等时间序列自相关调整",
+        "  t-stat 经 Newey-West HAC（Bartlett 核，滞后 11）调整",
         "",
         "数据概况：",
         f"  原始因子：{factor_rows:,} 条，可用日期 {factor_dates[0]} ~ {factor_dates[1]}",
@@ -272,7 +287,7 @@ def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dat
         f"{'IC 标准差':<16}{rank['std']:>14.4f}{pearson['std']:>16.4f}",
         f"{'ICIR':<16}{rank['ir']:>14.4f}{pearson['ir']:>16.4f}",
         f"{'IC > 0 占比':<16}{rank['positive_ratio']:>13.2%}{pearson['positive_ratio']:>15.2%}",
-        f"{'t-stat':<16}{rank['t_stat']:>14.4f}{pearson['t_stat']:>16.4f}",
+        f"{'HAC t-stat':<16}{rank['t_stat']:>14.4f}{pearson['t_stat']:>16.4f}",
         "",
         f"累计 Rank IC：{cumulative.iloc[0]:.4f} -> {cumulative.iloc[-1]:.4f}",
         f"综合提示：样本内 Rank IC {'为正' if rank['mean'] > 0 else '为负'}，均值 {rank['mean']:.4f}，ICIR {rank['ir']:.4f}；请结合样本长度及后续分层回测判断，不代表未来表现。",
