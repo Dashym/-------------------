@@ -213,6 +213,11 @@ def render_report(results, factor_rows, factor_dates, market_dates, adjusted_dat
             f"{summary['standard_error']:>14.4%}{summary['t_stat']:>14.4f}"
             f"{summary['p_value']:>12.4f}"
         )
+    lines.append(
+        f"{'Q5-Q1':<10}{spread['mean']:>14.4%}"
+        f"{spread['standard_error']:>14.4%}{spread['t_stat']:>14.4f}"
+        f"{spread['p_value']:>12.4f}"
+    )
     lines.extend(
         [
             "-" * 64,
